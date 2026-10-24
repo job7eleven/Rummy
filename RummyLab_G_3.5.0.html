@@ -1,0 +1,3169 @@
+<!doctype html>
+<!--
+  RummyLab G_3.5.0 (based on C_3.4.0)
+  Uses rules engine 規則引擎_G_3.5.0.js (checked at start-up against RummyEngine.VERSION).
+  Game and engine version independently (D21): a new game version may keep loading an older engine.
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RummyLab G_3.5.0｜拉密單人練習室</title>
+<style>
+  :root {
+    --felt: #1b5636;
+    --felt-light: #28734a;
+    --felt-dark: #0f331f;
+    --wood: #5e3a1c;
+    --wood-light: #8c5a30;
+    --wood-dark: #331d0c;
+    --brass: #d4af37;
+    --panel: #f6f3ec;
+    --ink: #1d1d1f;
+    --muted: #68686d;
+    --on-felt: #ebf5ee;
+    --on-felt-dim: rgba(235,245,238,.72);
+    --gold: #ffcf33;
+    --tile: #fcf9f0;
+    --tile-edge: #cfc5ae;
+    --red: #d11f2a;
+    --blue: #1858cc;
+    --black: #18181b;
+    --orange: #e67e00;
+    --bad: #ff4d4d;
+    --sel: #ffd400;
+    --new: #38bdf8;
+    --xray: #34d399;
+    /* Sizes are set from JS (applyMetrics) so layout maths and CSS agree. */
+    --tile-w: 40px; --tile-h: 56px; --cell-w: 42px; --cell-h: 82px; --label-h: 16px;
+    --cols: 32; --rows: 14;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  /* The page is a luxury club table: a 3D walnut bevelled rail around one emerald felt surface. */
+  body {
+    font-family: system-ui, -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    color: var(--ink); height: 100dvh; padding: 10px;
+    background:
+      linear-gradient(145deg, rgba(255,255,255,.08) 0%, transparent 35%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.04) 0px, rgba(0,0,0,.04) 2px, transparent 2px, transparent 9px),
+      linear-gradient(135deg, var(--wood-light) 0%, var(--wood) 45%, var(--wood-dark) 100%);
+    box-shadow: inset 0 2px 4px rgba(255,255,255,.25), inset 0 -4px 10px rgba(0,0,0,.6);
+    user-select: none; -webkit-user-select: none;
+  }
+  #felt {
+    height: 100%; display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; position: relative;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(255,255,255,.05) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 45%, var(--felt-light) 0%, var(--felt) 54%, var(--felt-dark) 100%);
+    box-shadow:
+      inset 0 0 55px rgba(0,0,0,.65),
+      inset 0 0 0 1px rgba(212,175,55,.28),
+      0 0 0 3px #2a1709,
+      0 6px 20px rgba(0,0,0,.5);
+  }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid #b9b2a2; background: #fff; padding: 6px 12px; transition: transform .1s, background .15s, box-shadow .15s; }
+  button:disabled { opacity: .42; cursor: default; transform: none !important; }
+  button.primary { background: linear-gradient(180deg, #ffe066, var(--gold)); border-color: #b88a00; font-weight: 700; color: #2b1d00; }
+  button.small { padding: 3px 9px; font-size: 13px; }
+  [hidden] { display: none !important; }
+  .tag { color: var(--on-felt); font-size: 13px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.65); }
+  .tag b { color: #fff; }
+
+  /* Top of the table: pool stacks, 3D standing computer rack, quick tools & menu */
+  #topZone {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px 6px;
+    background: linear-gradient(180deg, rgba(0,0,0,.28) 0%, rgba(0,0,0,0) 100%);
+    z-index: 5;
+  }
+  #poolArea {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 78px;
+    padding: 4px 10px; border-radius: 10px; background: rgba(0,0,0,.18);
+    border: 1px solid rgba(255,255,255,.1);
+  }
+  #compArea { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #compRack {
+    display: flex; gap: 3px; max-width: 100%; overflow-x: auto; padding: 7px 12px 9px; min-height: 42px;
+    background:
+      linear-gradient(180deg, #4a2c14 0%, #6b4221 35%, #3d220e 100%);
+    border-radius: 8px;
+    border-top: 1px solid rgba(255,255,255,.18);
+    border-bottom: 3px solid #241306;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,.55), 0 4px 10px rgba(0,0,0,.45);
+  }
+  /* 3D standing opponent tiles (inspired by mahjong reference 094300.png): ivory top bone + sapphire back */
+  #compRack .back {
+    flex: none; width: 18px; height: 26px; border-radius: 3px;
+    background:
+      linear-gradient(180deg, #faf6e8 0px, #faf6e8 3px, #7ba4f0 3px, #2958b5 6px, #1b3d82 100%);
+    border: 1px solid #102754;
+    box-shadow: 0 2px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.15);
+  }
+  #compMeta { display: flex; align-items: center; gap: 8px; }
+  .persona-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(0,0,0,.32); padding: 1px 9px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.18); font-size: 12.5px; color: #f3f8f5;
+  }
+  #compThinking { color: #ffd76a; font-weight: 700; animation: pulseText 1s infinite alternate; }
+  @keyframes pulseText { from { opacity: .6; } to { opacity: 1; } }
+
+  #menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .menu-btn {
+    background: rgba(255,255,255,.12); color: var(--on-felt); border: 1px solid rgba(255,255,255,.3);
+    font-size: 13px; padding: 5px 11px; border-radius: 16px; white-space: nowrap;
+    backdrop-filter: blur(4px); box-shadow: 0 2px 4px rgba(0,0,0,.25);
+  }
+  .menu-btn:hover:not(:disabled) { background: rgba(255,255,255,.24); transform: translateY(-1px); }
+  .menu-btn.active-toggle { background: rgba(52,211,153,.25); border-color: #6ee7b7; color: #fff; }
+
+  /* Play area: same felt, invisible grid, with a subtle club watermark crest in the exact center */
+  #board { flex: 1; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; position: relative; }
+  #board::-webkit-scrollbar { width: 8px; height: 8px; }
+  #board::-webkit-scrollbar-track, #board::-webkit-scrollbar-corner { background: transparent; }
+  #board::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 4px; }
+  #table { position: relative; width: calc(var(--cols) * var(--cell-w)); height: calc(var(--rows) * var(--cell-h)); }
+
+  /* Center table watermark crest (inspired by reference 094451.png) */
+  .table-crest {
+    position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 14px 28px; border-radius: 16px;
+    border: 1px dashed rgba(212,175,55,.22);
+    background: radial-gradient(ellipse at center, rgba(0,0,0,.14) 0%, rgba(0,0,0,0) 75%);
+    color: rgba(235,245,238,.28); text-align: center; z-index: 0;
+    min-width: 280px;
+  }
+  .table-crest .crest-title { font-size: 15px; font-weight: 800; letter-spacing: 3px; color: rgba(255,223,128,.32); margin-bottom: 2px; }
+  .table-crest .crest-sub { font-size: 12px; letter-spacing: .5px; }
+  .table-hint {
+    position: absolute; transform: translate(-50%, -50%); color: rgba(255,255,255,.82); font-size: 14px;
+    text-align: center; pointer-events: none; width: 300px; z-index: 1;
+    background: rgba(0,0,0,.28); padding: 10px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  }
+
+  .group { position: absolute; display: flex; z-index: 2; transition: left .24s cubic-bezier(.22,.9,.32,1), top .24s cubic-bezier(.22,.9,.32,1); }
+  body.dragging .group { transition: none; }
+  .group .tile { margin-right: 2px; }
+  .glabel {
+    position: absolute; left: 0; top: calc(-1 * var(--label-h)); height: var(--label-h); line-height: var(--label-h);
+    font-size: 11px; color: #dff3e5; white-space: nowrap; pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,.7);
+  }
+  .group.invalid .glabel { color: #ffb3b3; font-weight: 700; }
+  .group.invalid .tile { box-shadow: 0 0 0 2px var(--bad), 0 3px 5px rgba(0,0,0,.45); }
+  .seam { position: absolute; top: 0; width: 8px; height: var(--tile-h); cursor: col-resize; z-index: 4; }
+  .seam:hover::after { content: ""; position: absolute; left: 3px; top: 4px; bottom: 4px; width: 2px; background: var(--gold); border-radius: 1px; box-shadow: 0 0 4px #000; }
+  body.has-sel .seam, body.dragging .seam { pointer-events: none; }
+
+  /* X-Ray Ghost Extension Slots on the board when a matching hand tile is selected or hovered */
+  .xray-ext {
+    position: absolute; top: 0; width: var(--tile-w); height: var(--tile-h);
+    border-radius: 6px; border: 2px dashed var(--xray);
+    background: rgba(52,211,153,.18); box-shadow: 0 0 12px rgba(52,211,153,.4);
+    display: flex; align-items: center; justify-content: center;
+    color: #a7f3d0; font-size: 16px; font-weight: 800; cursor: pointer; z-index: 3;
+    animation: xrayPulse .9s infinite alternate;
+  }
+  .xray-ext:hover { background: rgba(52,211,153,.38); transform: scale(1.05); }
+  @keyframes xrayPulse { from { opacity: .65; } to { opacity: 1; } }
+
+  #preview { position: absolute; display: none; pointer-events: none; border-radius: 6px; border: 2px dashed var(--sel); background: rgba(255,212,0,.18); z-index: 5; }
+  #preview.bar { border: none; background: var(--sel); width: 4px !important; border-radius: 2px; box-shadow: 0 0 6px var(--sel); }
+
+  /* Authentic 3D Melamine Rummikub Tiles with recessed dimple & bottom lip */
+  .tile {
+    width: var(--tile-w); height: var(--tile-h); flex: none;
+    background: linear-gradient(180deg, #fffefb 0%, #faf5e8 82%, #ede4ce 100%);
+    border: 1px solid #d4cab4; border-bottom: 4px solid #bfb399; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    font-weight: 800; font-size: 23px; cursor: grab; touch-action: none;
+    box-shadow: 0 3px 5px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.9);
+    transition: transform .12s cubic-bezier(.2,.8,.3,1), box-shadow .12s;
+  }
+  /* Subtle recessed circular dimple on the tile face */
+  .tile::before {
+    content: ""; position: absolute; width: 72%; height: 52%; top: 18%; border-radius: 50%;
+    background: radial-gradient(circle at 50% 30%, rgba(0,0,0,.035), rgba(255,255,255,.5) 75%, transparent);
+    pointer-events: none;
+  }
+  .tile > span, .tile > svg { position: relative; z-index: 1; }
+  .tile.c-red { color: var(--red); }
+  .tile.c-blue { color: var(--blue); }
+  .tile.c-black { color: var(--black); }
+  .tile.c-orange { color: var(--orange); }
+  .tile.c-joker { color: var(--red); }
+  .tile.c-joker.j-black { color: var(--black); }
+  .tile .joker-svg { width: 72%; height: 72%; display: block; filter: drop-shadow(0 1px 0 rgba(255,255,255,.8)); }
+  .tile:hover:not(.locked) { transform: translateY(-2px); }
+  .tile.sel {
+    transform: translateY(-8px) !important;
+    box-shadow: 0 0 0 3px var(--sel), 0 10px 14px rgba(0,0,0,.5) !important;
+    z-index: 4;
+  }
+  .tile.new::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 7px; height: 7px;
+    border-radius: 50%; background: var(--new); box-shadow: 0 0 4px var(--new);
+  }
+  .tile.cpu { box-shadow: 0 0 0 3px #ffb300, 0 3px 5px rgba(0,0,0,.42); }
+  .tile.drawn { box-shadow: 0 0 0 3px var(--new), 0 3px 5px rgba(0,0,0,.42); }
+  /* Tactical Coach & X-Ray highlights */
+  .tile.coach-glow {
+    box-shadow: 0 0 0 3px var(--xray), 0 0 14px rgba(52,211,153,.85) !important;
+    animation: coachBounce .6s ease-in-out infinite alternate;
+  }
+  .tile.xray-match {
+    box-shadow: 0 0 0 2.5px #38bdf8, 0 0 10px rgba(56,189,248,.75) !important;
+  }
+  @keyframes coachBounce { from { transform: translateY(-2px); } to { transform: translateY(-7px); } }
+  /* Allow touch scrolling on locked board tiles so mobile users never get stuck scrolling a full board (T10 fix) */
+  .tile.locked { cursor: not-allowed; touch-action: pan-x pan-y; }
+  .tile.dragging-src { opacity: .28; pointer-events: none; }
+  .tile.arriving { visibility: hidden; }
+
+  /* Bottom of the table: status bar + step-by-step time machine + 3D walnut rack + action buttons */
+  #bottomZone {
+    position: relative; padding: 4px 16px 12px;
+    background: linear-gradient(0deg, rgba(0,0,0,.32) 0%, rgba(0,0,0,0) 100%);
+    z-index: 5;
+  }
+  #statusBar {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 28px; margin-bottom: 5px; flex-wrap: wrap;
+  }
+  #statusLine { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px 14px; overflow: hidden; }
+  #statusLine .tag { overflow: hidden; text-overflow: ellipsis; }
+  #hint { color: #ffe08a; font-weight: 700; }
+  #timer { font-variant-numeric: tabular-nums; font-weight: 700; color: #fff; background: rgba(0,0,0,.28); padding: 1px 8px; border-radius: 10px; }
+  #timer.warn { color: #fecaca; background: rgba(185,28,28,.65); animation: pulseText .5s infinite alternate; }
+
+  /* Step-by-step Undo/Redo & Table Tools mini bar */
+  #stepTools { display: flex; align-items: center; gap: 5px; }
+  .tool-pill {
+    background: rgba(0,0,0,.32); color: var(--on-felt); border: 1px solid rgba(255,255,255,.24);
+    font-size: 12.5px; padding: 3px 9px; border-radius: 12px; white-space: nowrap;
+  }
+  .tool-pill:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+  .tool-pill.coach-btn { border-color: rgba(255,207,51,.55); color: #ffe58f; }
+
+  #rackRow { display: flex; align-items: stretch; gap: 12px; }
+  #rackArea {
+    flex: 1; min-width: 0; border-radius: 10px; padding: 9px 10px 11px; min-height: calc(var(--tile-h) + 22px);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.12) 0%, transparent 18%),
+      linear-gradient(180deg, var(--wood-light) 0%, var(--wood) 68%, var(--wood-dark) 100%);
+    border-top: 1px solid rgba(255,255,255,.25);
+    border-bottom: 4px solid #241306;
+    box-shadow: inset 0 -5px 8px rgba(0,0,0,.45), inset 0 2px 4px rgba(0,0,0,.25), 0 6px 14px rgba(0,0,0,.5);
+  }
+  #rack { display: flex; flex-wrap: wrap; align-items: center; row-gap: 7px; }
+  .slot { width: 10px; flex: none; align-self: stretch; min-height: var(--tile-h); border-radius: 3px; }
+  .slot.tight { width: 3px; }
+  .slot.gap { width: 18px; }
+  .pending-sep {
+    flex: none; align-self: stretch; margin: 0 8px 0 14px; padding: 0 6px;
+    border-left: 2px dashed rgba(255,224,130,.65);
+    color: #ffe9b0; font-size: 12px; font-weight: 700; writing-mode: vertical-rl;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+  body.has-sel .slot { background: rgba(255,212,0,.18); cursor: copy; }
+  .slot.drop-hover { background: var(--sel) !important; }
+
+  /* Action buttons: fixed slots, the two optional ones only change visibility so nothing shifts. */
+  #actions { display: grid; grid-template-columns: repeat(2, minmax(118px, 1fr)); gap: 8px; align-content: center; }
+  .act {
+    min-height: 46px; font-size: 15.5px; font-weight: 700; border-radius: 10px; padding: 8px 12px;
+    background: linear-gradient(180deg, #ffffff, #ece6d8); border: 1px solid #bfb6a2;
+    box-shadow: 0 3px 0 #8c826d, 0 4px 8px rgba(0,0,0,.3); color: #222;
+  }
+  .act:hover:not(:disabled) { filter: brightness(1.03); }
+  .act:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #8c826d; }
+  .act.primary {
+    background: linear-gradient(180deg, #ffe375, #f5b800);
+    border-color: #b38600; color: #261900;
+    box-shadow: 0 3px 0 #8a6500, 0 4px 10px rgba(0,0,0,.35);
+  }
+  .act.invisible { visibility: hidden; }
+
+  /* Errors float above the rack so they never resize the table. */
+  #errors {
+    position: absolute; left: 16px; right: 16px; bottom: 100%; z-index: 20; margin-bottom: 6px;
+    padding: 9px 14px; background: #fff5f5; border: 1.5px solid #f87171; border-radius: 10px; color: #991b1b; font-size: 14px;
+    box-shadow: 0 6px 16px rgba(0,0,0,.4);
+  }
+  #errors:empty { display: none; }
+  #errors ul { margin: 4px 0 0; padding-left: 20px; }
+
+  /* Pool: face-down stacks of 10 with ivory bone edge */
+  #poolPile { display: inline-flex; align-items: flex-end; gap: 3px; height: 32px; cursor: pointer; }
+  .stack {
+    width: 14px; border-radius: 3px 3px 2px 2px;
+    background: repeating-linear-gradient(to top, #1e428a 0 2px, #f7f3e6 2px 3px);
+    border: 1px solid rgba(0,0,0,.4);
+    box-shadow: 0 2px 3px rgba(0,0,0,.5);
+  }
+  .tile-back {
+    width: 24px; height: 32px; border-radius: 4px;
+    background: linear-gradient(135deg, #3b6fd4, #1b3d82);
+    border: 2px solid #f7f3e6;
+    box-shadow: 0 6px 12px rgba(0,0,0,.5);
+  }
+  .flying { position: fixed; z-index: 80; pointer-events: none; transition: transform .38s cubic-bezier(.25,.75,.35,1), opacity .38s; }
+
+  #toast {
+    position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,23,42,.92); color: #fff; padding: 9px 18px; border-radius: 20px; font-size: 14px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,.18); box-shadow: 0 6px 20px rgba(0,0,0,.45);
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 70; max-width: calc(100vw - 32px); text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  #ghost { position: fixed; pointer-events: none; z-index: 60; display: none; opacity: .92; }
+  #ghost .tile { margin-right: 2px; box-shadow: 0 12px 22px rgba(0,0,0,.55); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .overlay.show { display: flex; }
+  .card {
+    background: var(--panel); border-radius: 14px; padding: 22px 26px; max-width: 620px; width: 100%;
+    max-height: calc(100dvh - 32px); overflow: auto;
+    border: 1px solid #d6cfbf; box-shadow: 0 16px 40px rgba(0,0,0,.5);
+  }
+  .card h2 { margin: 0 0 8px; font-size: 21px; color: #1e293b; }
+  .card h3 { margin: 16px 0 6px; font-size: 15px; color: #334155; }
+  .card fieldset { border: 1px solid #d6cfbf; border-radius: 10px; margin: 10px 0; padding: 8px 14px 12px; background: rgba(255,255,255,.55); }
+  .card legend { font-weight: 700; padding: 0 6px; color: #334155; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 6px 0; font-size: 14px; }
+  .row > .lbl { min-width: 9em; }
+  .row input[type=range] { flex: 1; min-width: 140px; }
+  .row output { min-width: 2.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .persona { display: flex; gap: 8px; align-items: flex-start; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .persona:hover { background: rgba(0,0,0,.04); }
+  .note { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+  .disabled-opt { color: #aaa; }
+  #exportBox { width: 100%; height: 130px; font-family: Consolas, monospace; font-size: 12px; margin-top: 6px; border-radius: 6px; padding: 6px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; font-size: 14px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; font-weight: 500; }
+  #log { height: 180px; overflow: auto; margin: 0; padding: 6px 8px 6px 28px; font-size: 13px; color: #333; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+  .help { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.65; }
+  #resultCard .rtiles { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 12px; }
+  #resultCard table { border-collapse: collapse; margin: 8px 0 16px; width: 100%; }
+  #resultCard td, #resultCard th { padding: 6px 10px; border-bottom: 1px solid #ddd; text-align: right; white-space: nowrap; }
+  #resultCard th:first-child, #resultCard td:first-child { text-align: left; }
+
+  @media (max-width: 680px) {
+    body { padding: 4px; }
+    #felt { border-radius: 12px; }
+    .tile { font-size: 19px; }
+    .card { padding: 16px; }
+    #topZone { gap: 8px; padding: 8px 8px 4px; }
+    #bottomZone { padding: 2px 8px 8px; }
+    #rackRow { flex-direction: column; gap: 8px; }
+    #actions { grid-template-columns: repeat(3, 1fr); }
+    .act { min-height: 42px; font-size: 14.5px; padding: 6px 6px; }
+    .tool-pill span.kb { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="felt">
+  <div id="topZone">
+    <div id="poolArea" title="點擊牌池可直接摸牌（未動牌時）">
+      <span id="poolPile"></span>
+      <span class="tag">牌池 <b id="sPool">0</b> 張</span>
+    </div>
+    <div id="compArea">
+      <div id="compRack"></div>
+      <div id="compMeta">
+        <span class="persona-pill" id="compWho">電腦</span>
+        <span class="tag" id="compThinking"></span>
+      </div>
+    </div>
+    <div id="menu">
+      <button class="menu-btn" id="btnSound" title="切換牌桌音效">🔊 音效</button>
+      <button class="menu-btn" id="btnNew">新局設定</button>
+      <button class="menu-btn" id="btnInfo">牌局資訊</button>
+    </div>
+  </div>
+
+  <main id="board"><div id="table"></div></main>
+
+  <div id="bottomZone">
+    <div id="errors"></div>
+    <div id="statusBar">
+      <div id="statusLine">
+        <span class="tag" id="turnInfo"></span>
+        <span class="tag" id="sMeld"></span>
+        <span class="tag" id="timer"></span>
+        <span class="tag" id="hint"></span>
+      </div>
+      <div id="stepTools">
+        <button class="tool-pill coach-btn" id="btnCoach" title="掃描手牌與桌面可出機會（快捷鍵 H）">💡 靈感<span class="kb"> (H)</span></button>
+        <button class="tool-pill" id="btnUndo" title="退回本回合上一步操作（Ctrl+Z）" disabled>↶ 上一步</button>
+        <button class="tool-pill" id="btnRedo" title="重做本回合下一步操作（Ctrl+Y）" disabled>↷ 下一步</button>
+        <button class="tool-pill" id="btnTidy" title="自動依序整齊排列桌面所有牌組（快捷鍵 T）">✨ 整理桌面</button>
+        <button class="tool-pill" id="btnCenter" title="將桌面視角置中（快捷鍵 C）">⌂ 置中</button>
+      </div>
+    </div>
+    <div id="rackRow">
+      <div id="rackArea"><div id="rack"></div></div>
+      <div id="actions">
+        <button id="btnPlace" class="act primary invisible" title="空白鍵或 Enter">出牌到桌面</button>
+        <button id="btnClear" class="act invisible">取消選取</button>
+        <button id="btnSort" class="act" title="快捷鍵：空白鍵切換、↑ 數字、↓ 顏色">理排</button>
+        <button id="btnReset" class="act">重設本回合</button>
+        <button id="btnDraw" class="act">摸牌</button>
+        <button id="btnEnd" class="act primary">結束回合</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="ghost"></div>
+
+<div class="overlay" id="info"><div class="card">
+  <h2>牌局資訊</h2>
+  <dl class="facts" id="infoFacts"></dl>
+  <h3>本局規則</h3>
+  <dl class="facts" id="infoRules"></dl>
+  <h3>紀錄</h3>
+  <ol id="log" reversed></ol>
+  <h3>操作說明（G_3.5.0 升級版）</h3>
+  <ul class="help">
+    <li><b>選牌與出新牌組</b>：點牌可多選，選成合法牌組時按<b>空白鍵</b>、Enter 或「出牌到桌面」即自動放到桌面中央；也可直接拖曳到桌面空位。</li>
+    <li><b>牌感雷達（X-Ray）</b>：選取或滑鼠懸停單張手牌時，桌面上可接牌的頭尾會浮現<b>翡翠綠虛線框</b>（直接點擊該框即可瞬間接上去！），可從中間拆切的長順子則會浮現藍光提示。</li>
+    <li><b>拆牌時光機（單步 Undo / Redo）</b>：複雜拆牌拉錯時，不必整回合重設！可按「↶ 上一步」（<code>Ctrl+Z</code>）與「↷ 下一步」（<code>Ctrl+Y</code>）逐步退回或重做。</li>
+    <li><b>桌面整理與視角</b>：按「✨ 整理桌面」（<code>T</code> 鍵）可將散亂的桌面牌組自動依順子／刻子對齊排好；按「⌂ 置中」（<code>C</code> 鍵）可回到桌面中央。</li>
+    <li><b>靈感提示</b>：卡關時按「💡 靈感」（<code>H</code> 鍵），系統會為你高亮手牌中的最高分破冰組合或可延伸接牌點。</li>
+    <li><b>理排</b>：按「理排」或空白鍵切換數字／顏色排序並併入新牌（<code>↑</code> 固定排數字、<code>↓</code> 固定排顏色）。</li>
+    <li>紅色外框＝不合法牌組；藍點＝本回合打出的牌；金色外框＝電腦上一回合出的牌。Esc 取消選取。</li>
+  </ul>
+  <div class="actions"><button class="primary" data-act="closeinfo">關閉</button></div>
+</div></div>
+
+<div class="overlay" id="setup"><div class="card">
+  <h2>新局設定</h2>
+  <fieldset>
+    <legend>對手（新局生效）</legend>
+    <div class="row"><span class="lbl">電腦人數</span>
+      <label><input type="radio" name="opponents" value="1" checked> 1 人</label>
+      <label class="disabled-opt"><input type="radio" name="opponents" value="2" disabled> 2 人</label>
+      <label class="disabled-opt"><input type="radio" name="opponents" value="3" disabled> 3 人（待擴充）</label>
+    </div>
+    <div id="personaList"></div>
+  </fieldset>
+  <fieldset>
+    <legend>規則（新局生效）</legend>
+    <div class="row"><label><input type="checkbox" data-cfg="iceBreakEnabled"> 破冰規則</label></div>
+    <div class="row" id="rowIce"><span class="lbl">破冰點數</span><input type="range" data-cfg="iceBreakPoints" min="1" max="50" step="1"><output data-out="iceBreakPoints"></output></div>
+    <div class="row"><label><input type="checkbox" data-cfg="timerEnabled"> 思考時間</label></div>
+    <div class="row" id="rowTimer"><span class="lbl">每回合秒數</span><input type="range" data-cfg="turnSeconds" min="30" max="180" step="10"><output data-out="turnSeconds"></output></div>
+    <div class="row"><label><input type="checkbox" data-cfg="resetPenalty"> 「重設本回合」要罰牌（還原後罰摸並結束回合）</label></div>
+    <div class="row"><label><input type="checkbox" data-cfg="sameColorTriple"> 三同色（例如 紅1＋紅1＋百搭）</label></div>
+    <details>
+      <summary>進階規則</summary>
+      <div class="row"><span class="lbl">起始手牌張數</span><input type="range" data-cfg="handSize" min="7" max="20" step="1"><output data-out="handSize"></output></div>
+      <div class="row"><span class="lbl">罰摸張數</span><input type="range" data-cfg="penaltyDraw" min="0" max="5" step="1"><output data-out="penaltyDraw"></output></div>
+      <div class="row"><span class="lbl">手上百搭牌計分</span><input type="range" data-cfg="jokerPenalty" min="0" max="50" step="1"><output data-out="jokerPenalty"></output></div>
+      <div class="row"><label><input type="checkbox" data-cfg="masterSteal"> 允許「拉密宗師」從桌面 4 張刻子／長順頭尾抽 1 張湊新組（T19）</label></div>
+    </details>
+  </fieldset>
+  <fieldset>
+    <legend>顯示與輔助（立即生效）</legend>
+    <div class="row"><label><input type="checkbox" data-cfg="showLabels"> 牌組顯示名稱與點數</label></div>
+    <div class="row"><label><input type="checkbox" data-cfg="xrayEnabled"> 啟用「牌感雷達」（選牌或懸停時顯示桌面可接位置與拆切提示）</label></div>
+    <div class="row"><label><input type="checkbox" data-cfg="soundEnabled"> 啟用擬真牌桌音效（Web Audio 合成器）</label></div>
+    <div class="row"><label><input type="checkbox" data-cfg="showDebug"> 紀錄與電腦牌架顯示受阻值 S（實測用）</label></div>
+  </fieldset>
+  <div class="actions">
+    <button class="small" data-act="defaults">還原預設</button>
+  </div>
+  <details>
+    <summary class="note">匯出設定</summary>
+    <div class="actions">
+      <button class="small" data-act="export">匯出 JSON</button>
+      <button class="small" data-act="copy">複製</button>
+      <button class="small" data-act="download">下載</button>
+    </div>
+    <textarea id="exportBox" readonly hidden></textarea>
+  </details>
+  <div class="actions">
+    <button class="primary" data-act="start">開始新局</button>
+    <button data-act="closesetup" id="btnBack">返回目前牌局</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="result"><div class="card" id="resultCard"></div></div>
+
+<script src="規則引擎_G_3.5.0.js"></script>
+<script id="engine-inline-fallback">if (!window.RummyEngine) {
+/*
+ * Rummikub single-player practice - rules engine
+ * Version: G_3.5.0 (based on C_3.4.0)
+ *
+ * Pure functions only: no DOM access, no hidden global state.
+ * Loaded by both the game page and the rule test page via a plain <script> tag
+ * (ES modules are blocked on file:// in Chrome, so this attaches to window.RummyEngine).
+ *
+ * Tile shape: { id: 'R05a', color: 'red'|'blue'|'black'|'orange'|null, number: 1..13|null, isJoker: bool }
+ * Board shape: array of groups, each group an ordered array of tiles (decision D5).
+ *
+ * G_3.5.0 enhancements:
+ * 1. Smart joker return in takeTile: when swapping a pool tile against the computer's hand (D3),
+ *    any joker in the computer's hand is prioritised for returning to the pool when handSize <= 6
+ *    (or with 75% priority earlier), preventing endgame deadlocks while strictly honouring D6.
+ * 2. Optional 1-tile table steal (masterSteal, T19): when enabled, allows borrowing a spare tile
+ *    from a 4-tile set or a 4+ tile run end on the table to form a new 3-tile meld with 2 tiles
+ *    from pool/hand, keeping existing table groups valid and intact.
+ * 3. Hand & board insight scanner (analyzeHandInsights): pure tactical radar for practice mode
+ *    (finds playable hand melds, max ice-break score combinations, extendable table ends, and
+ *    split/steal opportunities for any hovered or selected tile).
+ * 4. Built-in Monte Carlo batch simulator (simulatePersonaGames) for the test suite lab (T20).
+ */
+(function (root) {
+  'use strict';
+
+  const COLORS = ['red', 'blue', 'black', 'orange'];
+  const COLOR_CODES = { red: 'R', blue: 'B', black: 'K', orange: 'O' };
+  const MIN_NUMBER = 1;
+  const MAX_NUMBER = 13;
+  const COPIES = ['a', 'b'];
+  const JOKER_IDS = ['J1', 'J2'];
+
+  const DEFAULT_CONFIG = Object.freeze({
+    handSize: 14,           // tiles dealt to each side
+    iceBreakPoints: 30,     // minimum points for the first meld
+    jokerPenalty: 30,       // points a joker counts for when left in hand
+    penaltyDraw: 3,         // tiles drawn after a failed rearrangement
+    sameColorTriple: false, // house rule: 3 tiles of one number and one colour (needs a joker, e.g. R1 R1 J)
+    masterSteal: true,      // allow 1-tile spare steal from 4-tile sets / 4+ run ends when forming a new 3-tile meld (T19)
+    // Computer pacing (two-stage model D20, revised by draft v3 / D22 & D25), shared by all personas.
+    // Fixed by the owner (D23): not exposed on the setup screen.
+    stallStart: 0.5,          // stall value S at the start of a game
+    reliefCap: 0.7,           // upper limit of the draw relief r
+    reliefPerGroup: 0.01,     // draw relief per group on the table
+    reliefPerTableTile: 0.002,// draw relief per tile on the table
+    extendBase: 3,            // extension patterns are weighted by G / (G + extendBase), G = groups on the table
+    pairSameGroup: 0.7,       // when playing 2 tiles, chance to try putting both on one group first
+  });
+
+  // User-facing messages (Traditional Chinese) keyed by error / reason code.
+  const MESSAGES = Object.freeze({
+    too_short: '牌組少於 3 張',
+    set_too_long: '群組（刻子）最多 4 張',
+    set_number_mismatch: '群組數字必須相同',
+    set_duplicate_color: '群組顏色不可重複',
+    run_too_long: '順組最多 13 張',
+    run_color_mismatch: '順組顏色必須相同',
+    run_not_consecutive: '順組數字必須連續遞增',
+    run_out_of_range: '順組超出 1～13 範圍（1 與 13 不可相連）',
+    all_jokers: '牌組至少要有 1 張數字牌',
+    tile_conservation: '牌數不一致：有牌憑空出現或消失',
+    board_tile_to_hand: '桌面上的牌不可收回手牌',
+    joker_to_hand: '桌面上的百搭牌不可收回手牌',
+    no_tile_played: '本回合沒有出任何牌',
+    invalid_group: '桌面上有不合法的牌組',
+    ice_break_uses_board: '破冰時不可使用桌面上的牌',
+    ice_break_board_changed: '破冰時不可變動桌面上的既有牌組',
+    ice_break_insufficient: '破冰點數不足',
+  });
+
+  // Computer personas (D20, values from design draft v3 with fewer 2-tile plays since C_3.4.0 / D25;
+  // fixed, not editable on the setup screen - D23):
+  const PERSONAS = Object.freeze([
+    { id: 'apprentice', name: '迷糊學徒', desc: '常卡住、出小牌、偶爾犯規', simTurns: 56, k: 0.025, b: 0.20, patterns: { play1: 53, play2: 12, play3: 27, play4: 0, foul: 8 } },
+    { id: 'steady', name: '穩健牌友', desc: '節奏平均，適合陪練', simTurns: 43, k: 0.030, b: 0.25, patterns: { play1: 40, play2: 15, play3: 35, play4: 7, foul: 3 } },
+    { id: 'gambler', name: '冒險賭徒', desc: '愛出大牌，但常拆牌犯規', simTurns: 35, k: 0.030, b: 0.25, patterns: { play1: 20, play2: 10, play3: 42, play4: 18, foul: 10 } },
+    { id: 'master', name: '拉密宗師', desc: '不易卡住、善用桌面、零失誤', simTurns: 25, k: 0.040, b: 0.30, patterns: { play1: 27, play2: 18, play3: 35, play4: 20, foul: 0 } },
+  ]);
+
+  function makeConfig(overrides) {
+    return Object.assign({}, DEFAULT_CONFIG, overrides || {});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Random numbers (seedable so a deal can be replayed)
+  // ---------------------------------------------------------------------------
+
+  // mulberry32: small, fast, good enough for shuffling.
+  function createRng(seed) {
+    let a = (seed === undefined ? Math.floor(Math.random() * 4294967296) : seed) >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Deck and dealing
+  // ---------------------------------------------------------------------------
+
+  function createDeck() {
+    const deck = [];
+    for (const color of COLORS) {
+      for (let n = MIN_NUMBER; n <= MAX_NUMBER; n++) {
+        for (const copy of COPIES) {
+          deck.push({ id: COLOR_CODES[color] + String(n).padStart(2, '0') + copy, color: color, number: n, isJoker: false });
+        }
+      }
+    }
+    for (const id of JOKER_IDS) {
+      deck.push({ id: id, color: null, number: null, isJoker: true });
+    }
+    return deck;
+  }
+
+  // Fisher-Yates on a copy; the input array is left untouched.
+  function shuffle(tiles, rng) {
+    const rand = rng || Math.random;
+    const out = tiles.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const tmp = out[i];
+      out[i] = out[j];
+      out[j] = tmp;
+    }
+    return out;
+  }
+
+  // Deals real hands to both sides (decision D1); the rest is the pool.
+  function dealGame(seed, config) {
+    const cfg = makeConfig(config);
+    const deck = shuffle(createDeck(), createRng(seed));
+    return {
+      playerHand: deck.slice(0, cfg.handSize),
+      computerHand: deck.slice(cfg.handSize, cfg.handSize * 2),
+      pool: deck.slice(cfg.handSize * 2),
+      board: [],
+    };
+  }
+
+  // Takes up to n tiles from the front of the pool. Never throws on an empty pool.
+  function drawFromPool(pool, n) {
+    const count = Math.max(0, Math.min(n, pool.length));
+    return { drawn: pool.slice(0, count), pool: pool.slice(count) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Group validation
+  // ---------------------------------------------------------------------------
+
+  function result(valid, type, values, reason) {
+    const points = values ? values.reduce(function (s, v) { return s + v; }, 0) : 0;
+    return { valid: valid, type: type, values: values, points: points, reason: reason || null };
+  }
+
+  function fail(reason) {
+    return result(false, null, null, reason);
+  }
+
+  function analyzeSet(tiles) {
+    if (tiles.length < 3) return fail('too_short');
+    if (tiles.length > 4) return fail('set_too_long');
+    const real = tiles.filter(function (t) { return !t.isJoker; });
+    if (real.length === 0) return fail('all_jokers');
+    const n = real[0].number;
+    if (real.some(function (t) { return t.number !== n; })) return fail('set_number_mismatch');
+    const colors = new Set(real.map(function (t) { return t.color; }));
+    if (colors.size !== real.length) return fail('set_duplicate_color');
+    return result(true, 'set', tiles.map(function () { return n; }));
+  }
+
+  // Runs are read in array order and must ascend; a joker takes the value of its position.
+  function analyzeRun(tiles) {
+    if (tiles.length < 3) return fail('too_short');
+    if (tiles.length > MAX_NUMBER) return fail('run_too_long');
+    const firstReal = tiles.findIndex(function (t) { return !t.isJoker; });
+    if (firstReal === -1) return fail('all_jokers');
+    const color = tiles[firstReal].color;
+    for (const t of tiles) {
+      if (!t.isJoker && t.color !== color) return fail('run_color_mismatch');
+    }
+    const start = tiles[firstReal].number - firstReal;
+    for (let k = 0; k < tiles.length; k++) {
+      if (!tiles[k].isJoker && tiles[k].number !== start + k) return fail('run_not_consecutive');
+    }
+    if (start < MIN_NUMBER || start + tiles.length - 1 > MAX_NUMBER) return fail('run_out_of_range');
+    return result(true, 'run', tiles.map(function (_, k) { return start + k; }));
+  }
+
+  // House rule (config.sameColorTriple): exactly 3 tiles, every real tile the same number and colour.
+  // With only two copies of each tile this needs a joker, e.g. [R1, R1, J].
+  function analyzeTriple(tiles) {
+    if (tiles.length !== 3) return fail('too_short');
+    const real = tiles.filter(function (t) { return !t.isJoker; });
+    if (real.length === 0) return fail('all_jokers');
+    const n = real[0].number, c = real[0].color;
+    if (real.some(function (t) { return t.number !== n || t.color !== c; })) return fail('set_duplicate_color');
+    return result(true, 'triple', tiles.map(function () { return n; }));
+  }
+
+  // Returns { valid, type: 'set'|'run'|'triple'|null, values, points, reason }.
+  // When jokers make both readings legal (e.g. [R5, J, J]), the higher-scoring one wins; ties read as a set.
+  // config: only sameColorTriple is read here.
+  function analyzeGroup(tiles, config) {
+    if (!tiles || tiles.length < 3) return fail('too_short');
+    const asSet = analyzeSet(tiles);
+    const asRun = analyzeRun(tiles);
+    if (asSet.valid && asRun.valid) return asRun.points > asSet.points ? asRun : asSet;
+    if (asSet.valid) return asSet;
+    if (asRun.valid) return asRun;
+    if (config && config.sameColorTriple) {
+      const asTriple = analyzeTriple(tiles);
+      if (asTriple.valid) return asTriple;
+    }
+    // Pick the more relevant reason: tiles sharing one number were meant as a set.
+    const real = tiles.filter(function (t) { return !t.isJoker; });
+    const sameNumber = real.every(function (t) { return t.number === real[0].number; });
+    return sameNumber ? asSet : asRun;
+  }
+
+  function compactBoard(board) {
+    return board.filter(function (g) { return g.length > 0; });
+  }
+
+  function validateBoard(board, config) {
+    const groups = compactBoard(board).map(function (g, index) {
+      return Object.assign({ index: index }, analyzeGroup(g, config));
+    });
+    return { valid: groups.every(function (g) { return g.valid; }), groups: groups };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Turn snapshot and end-of-turn checks
+  // ---------------------------------------------------------------------------
+
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  // Taken the moment a turn starts; restoring it is the "reset turn" action.
+  function createSnapshot(board, hand) {
+    return { board: clone(compactBoard(board)), hand: clone(hand) };
+  }
+
+  function restoreSnapshot(snapshot) {
+    return { board: clone(snapshot.board), hand: clone(snapshot.hand) };
+  }
+
+  function boardTiles(board) {
+    return board.reduce(function (all, g) { return all.concat(g); }, []);
+  }
+
+  function ids(tiles) {
+    return tiles.map(function (t) { return t.id; });
+  }
+
+  function sameIdMultiset(a, b) {
+    if (a.length !== b.length) return false;
+    const x = a.slice().sort();
+    const y = b.slice().sort();
+    return x.every(function (v, i) { return v === y[i]; });
+  }
+
+  // Checks whether the player may end the turn with this board and hand.
+  // args: { snapshot, board, hand, hasMelded, config }
+  // Returns { ok, errors: [{ code, message, groupIndex? }], playedIds, meldPoints, board: validateBoard result }.
+  function checkTurnEnd(args) {
+    const cfg = makeConfig(args.config);
+    const board = compactBoard(args.board);
+    const hand = args.hand;
+    const snap = args.snapshot;
+    const errors = [];
+    const addError = function (code, extra) {
+      errors.push(Object.assign({ code: code, message: MESSAGES[code] }, extra || {}));
+    };
+
+    const beforeIds = ids(boardTiles(snap.board)).concat(ids(snap.hand));
+    const afterIds = ids(boardTiles(board)).concat(ids(hand));
+    if (!sameIdMultiset(beforeIds, afterIds)) addError('tile_conservation');
+
+    const handIdSet = new Set(ids(hand));
+    const snapBoardTiles = boardTiles(snap.board);
+    const backToHand = snapBoardTiles.filter(function (t) { return handIdSet.has(t.id); });
+    if (backToHand.some(function (t) { return t.isJoker; })) addError('joker_to_hand');
+    if (backToHand.some(function (t) { return !t.isJoker; })) addError('board_tile_to_hand');
+
+    const boardIdSet = new Set(ids(boardTiles(board)));
+    const playedIds = ids(snap.hand).filter(function (id) { return boardIdSet.has(id); });
+    if (playedIds.length === 0) addError('no_tile_played');
+
+    const validation = validateBoard(board, cfg);
+    validation.groups.forEach(function (g) {
+      if (!g.valid) addError('invalid_group', { groupIndex: g.index, reason: g.reason, reasonMessage: MESSAGES[g.reason] });
+    });
+
+    let meldPoints = 0;
+    if (!args.hasMelded) {
+      const played = new Set(playedIds);
+      const untouchedGroups = [];
+      let usesBoard = false;
+      board.forEach(function (g, i) {
+        const hasPlayed = g.some(function (t) { return played.has(t.id); });
+        const hasOld = g.some(function (t) { return !played.has(t.id); });
+        if (hasPlayed && hasOld) usesBoard = true;
+        else if (hasPlayed) meldPoints += validation.groups[i].valid ? validation.groups[i].points : 0;
+        else untouchedGroups.push(ids(g).sort().join(','));
+      });
+      if (usesBoard) addError('ice_break_uses_board');
+      // Existing groups must survive as the same tile sets (order inside a group may change).
+      const originalGroups = snap.board.map(function (g) { return ids(g).sort().join(','); });
+      if (!usesBoard && !sameIdMultiset(originalGroups, untouchedGroups)) addError('ice_break_board_changed');
+      if (playedIds.length > 0 && meldPoints < cfg.iceBreakPoints) {
+        addError('ice_break_insufficient', { meldPoints: meldPoints, required: cfg.iceBreakPoints });
+      }
+    }
+
+    return { ok: errors.length === 0, errors: errors, playedIds: playedIds, meldPoints: meldPoints, board: validation };
+  }
+
+  // Failed rearrangement: restore the snapshot and draw the penalty tiles.
+  function applyFailedTurn(snapshot, pool, config) {
+    const cfg = makeConfig(config);
+    const restored = restoreSnapshot(snapshot);
+    const draw = drawFromPool(pool, cfg.penaltyDraw);
+    return { board: restored.board, hand: restored.hand.concat(draw.drawn), pool: draw.pool, drawn: draw.drawn };
+  }
+
+  // Plain draw-one action.
+  function applyDraw(hand, pool) {
+    const draw = drawFromPool(pool, 1);
+    return { hand: hand.concat(draw.drawn), pool: draw.pool, drawn: draw.drawn };
+  }
+
+  // ---------------------------------------------------------------------------
+  // End of game and scoring (decision D4)
+  // ---------------------------------------------------------------------------
+
+  function handPoints(hand, config) {
+    const cfg = makeConfig(config);
+    return hand.reduce(function (s, t) { return s + (t.isJoker ? cfg.jokerPenalty : t.number); }, 0);
+  }
+
+  // Pool empty and a full round passed with nobody playing.
+  function isBlocked(poolCount, consecutivePasses, playerCount) {
+    return poolCount === 0 && consecutivePasses >= (playerCount || 2);
+  }
+
+  // Winner: whoever emptied their hand; otherwise the lower hand total; equal totals are a draw.
+  // Loser scores minus their own total, winner scores the loser's total; on a draw both score minus their own.
+  function scoreGame(playerHand, computerHand, config) {
+    const pp = handPoints(playerHand, config);
+    const cp = handPoints(computerHand, config);
+    let winner;
+    if (playerHand.length === 0) winner = 'player';
+    else if (computerHand.length === 0) winner = 'computer';
+    else if (pp < cp) winner = 'player';
+    else if (cp < pp) winner = 'computer';
+    else winner = 'draw';
+
+    let scores;
+    if (winner === 'player') scores = { player: cp, computer: -cp };
+    else if (winner === 'computer') scores = { player: -pp, computer: pp };
+    else scores = { player: -pp, computer: -cp };
+    return { winner: winner, playerPoints: pp, computerPoints: cp, scores: scores };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers for the rack and integrity checks
+  // ---------------------------------------------------------------------------
+
+  function colorRank(t) {
+    return t.isJoker ? COLORS.length : COLORS.indexOf(t.color);
+  }
+
+  // Jokers always go last.
+  function sortByNumber(hand) {
+    return hand.slice().sort(function (a, b) {
+      if (a.isJoker !== b.isJoker) return a.isJoker ? 1 : -1;
+      return (a.number - b.number) || (colorRank(a) - colorRank(b)) || (a.id < b.id ? -1 : 1);
+    });
+  }
+
+  function sortByColor(hand) {
+    return hand.slice().sort(function (a, b) {
+      if (a.isJoker !== b.isJoker) return a.isJoker ? 1 : -1;
+      return (colorRank(a) - colorRank(b)) || (a.number - b.number) || (a.id < b.id ? -1 : 1);
+    });
+  }
+
+  // Reorders a group into its most likely intended layout (used for new groups and the "arrange" button).
+  function arrangeGroup(tiles) {
+    const real = tiles.filter(function (t) { return !t.isJoker; }).sort(function (a, b) { return a.number - b.number; });
+    const jokers = tiles.filter(function (t) { return t.isJoker; });
+    if (real.length === 0) return tiles.slice();
+    const sameColor = real.every(function (t) { return t.color === real[0].color; });
+    const distinct = new Set(real.map(function (t) { return t.number; })).size === real.length;
+    if (!(sameColor && distinct)) return sortByColor(real).concat(jokers);
+
+    const out = [];
+    for (let i = 0; i < real.length; i++) {
+      if (i > 0) {
+        let gap = real[i].number - real[i - 1].number - 1;
+        while (gap-- > 0 && jokers.length) out.push(jokers.shift());
+      }
+      out.push(real[i]);
+    }
+    let last = real[real.length - 1].number;
+    while (jokers.length) {
+      if (last < MAX_NUMBER) { out.push(jokers.shift()); last++; }
+      else out.unshift(jokers.shift());
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Computer opponent (Phase 3), two-stage model (D20, revised by draft v3 / D22 & D25):
+  //   stage 1 - the stall value S decides whether the computer can play at all;
+  //   stage 2 - the persona's pattern weights decide how it plays.
+  // ---------------------------------------------------------------------------
+  const PATTERNS = ['play1', 'play2', 'play3', 'play4', 'foul'];
+  const PLAY_COUNT = { play1: 1, play2: 2, play3: 3, play4: 4 };
+
+  function drawRelief(handSize, k, board, config) {
+    const cfg = makeConfig(config);
+    const groups = compactBoard(board || []);
+    const tableTiles = groups.reduce(function (s, g) { return s + g.length; }, 0);
+    return Math.min(cfg.reliefCap, k * handSize + cfg.reliefPerGroup * groups.length + cfg.reliefPerTableTile * tableTiles);
+  }
+
+  function stallAfterTurn(action, handSize, k, board, drawnCount, config) {
+    if (action === 'play' || action === 'pass') return 1;
+    return Math.pow(1 - drawRelief(handSize, k, board, config), drawnCount);
+  }
+
+  function stallAfterOpponent(stall, units, b) {
+    return stall * Math.pow(1 - b, units);
+  }
+
+  const groupSig = function (g) { return ids(g).sort().join(','); };
+
+  function countBoardChange(beforeBoard, afterBoard, playedIds) {
+    const after = new Set(compactBoard(afterBoard).map(groupSig));
+    const changed = compactBoard(beforeBoard).filter(function (g) { return !after.has(groupSig(g)); }).length;
+    return playedIds.length + changed;
+  }
+
+  function changedGroups(beforeBoard, afterBoard) {
+    const before = new Set(compactBoard(beforeBoard).map(groupSig));
+    const out = [];
+    compactBoard(afterBoard).forEach(function (g, i) { if (!before.has(groupSig(g))) out.push(i); });
+    return out;
+  }
+
+  function choosePattern(patterns, handSize, groupCount, rng, config, restricted) {
+    const cfg = makeConfig(config);
+    const extFactor = groupCount / (groupCount + cfg.extendBase);
+    const w = {};
+    PATTERNS.forEach(function (p) {
+      const n = PLAY_COUNT[p];
+      let v = Math.max(0, patterns[p] || 0);
+      if (n && n > handSize) v = 0;
+      if (restricted) { if (!(n && n <= 2)) v = 0; }
+      else {
+        if (n && n <= 2) v *= extFactor;
+        if (p === 'foul' && groupCount < 2) v = 0;
+      }
+      w[p] = v;
+    });
+    const total = PATTERNS.reduce(function (s, p) { return s + w[p]; }, 0);
+    if (total <= 0) return 'play1';
+    let r = (rng || Math.random)() * total;
+    for (const p of PATTERNS) {
+      if (w[p] > 0 && r < w[p]) return p;
+      r -= w[p];
+    }
+    return 'play1';
+  }
+
+  function combinations(items, k) {
+    if (k === 0) return [[]];
+    if (items.length < k) return [];
+    const head = items[0], rest = items.slice(1);
+    return combinations(rest, k - 1).map(function (c) { return [head].concat(c); }).concat(combinations(rest, k));
+  }
+
+  // All new groups of exactly `size` tiles that can be built from `tiles` (jokers are never used, D6).
+  function findMelds(tiles, size) {
+    const real = tiles.filter(function (t) { return !t.isJoker; });
+    const out = [];
+    if (size <= 4) {
+      for (let n = MIN_NUMBER; n <= MAX_NUMBER; n++) {
+        const byColor = {};
+        real.forEach(function (t) { if (t.number === n && !byColor[t.color]) byColor[t.color] = t; });
+        combinations(Object.keys(byColor), size).forEach(function (cs) { out.push(cs.map(function (c) { return byColor[c]; })); });
+      }
+    }
+    for (const color of COLORS) {
+      const byNum = {};
+      real.forEach(function (t) { if (t.color === color && !byNum[t.number]) byNum[t.number] = t; });
+      for (let s = MIN_NUMBER; s + size - 1 <= MAX_NUMBER; s++) {
+        const run = [];
+        for (let k = 0; k < size && byNum[s + k]; k++) run.push(byNum[s + k]);
+        if (run.length === size) out.push(run);
+      }
+    }
+    return out;
+  }
+
+  // Single tiles from `sources` that can be added to either end of a table group.
+  function findExtensions(board, sources, config) {
+    const out = [];
+    board.forEach(function (g, gi) {
+      sources.forEach(function (t) {
+        if (t.isJoker) return;
+        if (analyzeGroup([t].concat(g), config).valid) out.push({ type: 'extend', group: gi, end: 'start', tile: t });
+        if (analyzeGroup(g.concat([t]), config).valid) out.push({ type: 'extend', group: gi, end: 'end', tile: t });
+      });
+    });
+    return out;
+  }
+
+  function pick(list, rng) {
+    return list[Math.floor(rng() * list.length)];
+  }
+
+  // Moves one played tile out of its source. A pool tile is swapped against a hand tile,
+  // which goes back into the pool at a random place (D3), so the hand shrinks by one either way.
+  // G_3.5.0 fix: if the computer's hand holds a joker (which it never plays directly under D6),
+  // prioritise returning the joker to the pool when handSize <= 6 (or with 75% chance earlier)
+  // so the computer cannot get deadlocked holding only jokers when the pool runs low.
+  function takeTile(st, tile, from, rng) {
+    if (from === 'pool') {
+      st.pool.splice(st.pool.findIndex(function (t) { return t.id === tile.id; }), 1);
+      const jokerIdx = st.hand.findIndex(function (t) { return t.isJoker; });
+      let returnIdx;
+      if (jokerIdx >= 0 && (st.hand.length <= 6 || rng() < 0.75)) {
+        returnIdx = jokerIdx;
+      } else {
+        returnIdx = Math.floor(rng() * st.hand.length);
+      }
+      const back = st.hand.splice(returnIdx, 1)[0];
+      st.pool.splice(Math.floor(rng() * (st.pool.length + 1)), 0, back);
+    } else {
+      st.hand.splice(st.hand.findIndex(function (t) { return t.id === tile.id; }), 1);
+    }
+    st.played.push(tile);
+  }
+
+  // Finds spare tiles on the table that can be safely detached without breaking their original group
+  // (from a 4-tile set or either end of a 4+ tile run, provided no jokers are disturbed).
+  function findStealableBoardTiles(board, config) {
+    const out = [];
+    board.forEach(function (g, gi) {
+      if (g.length < 4) return;
+      if (g.some(function (t) { return t.isJoker; })) return;
+      const a = analyzeGroup(g, config);
+      if (!a.valid) return;
+      if (a.type === 'set' && g.length === 4) {
+        g.forEach(function (t, ti) {
+          const rem = g.slice(0, ti).concat(g.slice(ti + 1));
+          if (analyzeGroup(rem, config).valid) {
+            out.push({ group: gi, index: ti, tile: t });
+          }
+        });
+      } else if (a.type === 'run' && g.length >= 4) {
+        if (analyzeGroup(g.slice(1), config).valid) {
+          out.push({ group: gi, index: 0, tile: g[0] });
+        }
+        if (analyzeGroup(g.slice(0, g.length - 1), config).valid) {
+          out.push({ group: gi, index: g.length - 1, tile: g[g.length - 1] });
+        }
+      }
+    });
+    return out;
+  }
+
+  // Tries a 1-tile spare steal from a 4-tile set / 4+ run end plus 2 tiles from pool/hand to open a new 3-tile meld (T19).
+  function addStealMeld(st, config, rng) {
+    const spares = findStealableBoardTiles(st.board, config);
+    if (!spares.length) return false;
+    const shuffledSpares = shuffle(spares, rng);
+    for (const sp of shuffledSpares) {
+      for (const from of ['pool', 'hand']) {
+        const candidates = st[from].filter(function (t) { return !t.isJoker; });
+        if (candidates.length < 2) continue;
+        const pairs = [];
+        const sameNum = candidates.filter(function (t) { return t.number === sp.tile.number && t.color !== sp.tile.color; });
+        const byColor = {};
+        sameNum.forEach(function (t) { if (!byColor[t.color]) byColor[t.color] = t; });
+        const colors = Object.keys(byColor);
+        if (colors.length >= 2) {
+          combinations(colors, 2).forEach(function (cs) {
+            pairs.push([byColor[cs[0]], byColor[cs[1]]]);
+          });
+        }
+        const sameCol = candidates.filter(function (t) { return t.color === sp.tile.color; });
+        const byNum = {};
+        sameCol.forEach(function (t) { if (!byNum[t.number]) byNum[t.number] = t; });
+        const n = sp.tile.number;
+        [[n - 2, n - 1], [n - 1, n + 1], [n + 1, n + 2]].forEach(function (ns) {
+          if (ns[0] >= MIN_NUMBER && ns[1] <= MAX_NUMBER && byNum[ns[0]] && byNum[ns[1]]) {
+            pairs.push([byNum[ns[0]], byNum[ns[1]]]);
+          }
+        });
+        if (!pairs.length) continue;
+        const chosenPair = pick(pairs, rng);
+        const meld = arrangeGroup([sp.tile, chosenPair[0], chosenPair[1]]);
+        if (!analyzeGroup(meld, config).valid) continue;
+        st.board[sp.group].splice(sp.index, 1);
+        chosenPair.forEach(function (t) { takeTile(st, t, from, rng); });
+        st.board.push(meld.slice());
+        st.moves.push({
+          type: 'steal',
+          fromGroup: sp.group,
+          fromIndex: sp.index,
+          stolenTile: sp.tile,
+          tiles: meld,
+          playedTiles: chosenPair,
+          from: from,
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function addMeld(st, size, rng) {
+    for (const from of ['pool', 'hand']) {
+      const melds = findMelds(st[from], size);
+      if (!melds.length) continue;
+      const meld = arrangeGroup(pick(melds, rng));
+      meld.forEach(function (t) { takeTile(st, t, from, rng); });
+      st.board.push(meld.slice());
+      st.moves.push({ type: 'new', tiles: meld, from: from });
+      return true;
+    }
+    return false;
+  }
+
+  function applyExtension(st, mv, from, rng) {
+    takeTile(st, mv.tile, from, rng);
+    const g = st.board[mv.group];
+    if (mv.end === 'start') g.unshift(mv.tile); else g.push(mv.tile);
+    st.moves.push({ type: 'extend', group: mv.group, end: mv.end, tile: mv.tile, from: from });
+  }
+
+  function addExtension(st, config, rng, allowed) {
+    for (const from of ['pool', 'hand']) {
+      let ext = findExtensions(st.board, st[from], config);
+      if (allowed) ext = ext.filter(function (e) { return allowed.indexOf(e.group) >= 0; });
+      if (!ext.length) continue;
+      applyExtension(st, pick(ext, rng), from, rng);
+      return true;
+    }
+    return false;
+  }
+
+  function cloneState(st) {
+    return { board: st.board.map(function (g) { return g.slice(); }), pool: st.pool.slice(), hand: st.hand.slice(), moves: st.moves.slice(), played: st.played.slice() };
+  }
+
+  function addPairSameGroup(st, config, rng, allowed) {
+    for (const from of ['pool', 'hand']) {
+      let firsts = findExtensions(st.board, st[from], config);
+      if (allowed) firsts = firsts.filter(function (e) { return allowed.indexOf(e.group) >= 0; });
+      firsts = shuffle(firsts, rng).slice(0, 60);
+      for (const mv of firsts) {
+        const trial = cloneState(st);
+        applyExtension(trial, mv, from, rng);
+        if (addExtension(trial, config, rng, [mv.group])) {
+          Object.assign(st, trial);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function tryPlay(base, n, config, rng, allowed, canSteal) {
+    if (base.hand.length < n) return null;
+    const st = { board: base.board.map(function (g) { return g.slice(); }), pool: base.pool.slice(), hand: base.hand.slice(), moves: [], played: [] };
+    let ok = false;
+    if (n >= 3) {
+      if (allowed) return null;
+      ok = addMeld(st, n, rng);
+      if (!ok && n === 4) {
+        const sub = { board: base.board.map(function (g) { return g.slice(); }), pool: base.pool.slice(), hand: base.hand.slice(), moves: [], played: [] };
+        if (addMeld(sub, 3, rng) && addExtension(sub, config, rng)) {
+          Object.assign(st, sub);
+          ok = true;
+        }
+      }
+    } else {
+      if (n === 2 && !allowed && canSteal && rng() < 0.35) {
+        ok = addStealMeld(st, config, rng);
+      }
+      if (!ok && n === 2 && rng() < config.pairSameGroup) {
+        ok = addPairSameGroup(st, config, rng, allowed);
+      }
+      if (!ok) {
+        const sub = { board: base.board.map(function (g) { return g.slice(); }), pool: base.pool.slice(), hand: base.hand.slice(), moves: [], played: [] };
+        let extOk = true;
+        for (let i = 0; i < n && extOk; i++) extOk = addExtension(sub, config, rng, allowed);
+        if (extOk) {
+          Object.assign(st, sub);
+          ok = true;
+        }
+      }
+      if (!ok && !allowed && base.hand.length >= 3) {
+        ok = addMeld(st, 3, rng);
+      }
+    }
+    return ok ? st : null;
+  }
+
+  function planComputerTurn(args) {
+    const cfg = makeConfig(args.config);
+    const rng = args.rng || Math.random;
+    const persona = args.persona;
+    const base = { board: compactBoard(args.board), pool: args.pool, hand: args.hand };
+    const units = args.opponentUnits || 0;
+    const startStall = typeof args.stall === 'number' ? args.stall : cfg.stallStart;
+    const stallBefore = stallAfterOpponent(startStall, units, persona.b);
+    const blocked = typeof args.forceBlocked === 'boolean' ? args.forceBlocked : rng() < stallBefore;
+    const restricted = units > 0 && (args.lastAction === 'play' || args.lastAction === 'pass');
+    const allowed = restricted ? (args.playerGroups || []) : null;
+    const canSteal = Boolean(args.config && args.config.masterSteal === true && persona && persona.id === 'master');
+
+    const keepBoard = function () { return base.board.map(function (g) { return g.slice(); }); };
+    const drawResult = function (action, n) {
+      const d = drawFromPool(base.pool, n);
+      if (!d.drawn.length) return { action: 'pass', moves: [], played: [], board: keepBoard(), pool: base.pool.slice(), hand: base.hand.slice(), drawn: [] };
+      return { action: action, moves: [], played: [], board: keepBoard(), pool: d.pool, hand: base.hand.concat(d.drawn), drawn: d.drawn };
+    };
+
+    let pattern = null, res = null;
+    if (blocked) {
+      res = drawResult('draw', 1);
+    } else {
+      pattern = args.forcePattern || choosePattern(persona.patterns, base.hand.length, base.board.length, rng, cfg, restricted);
+      if (pattern === 'foul') res = drawResult('foul', cfg.penaltyDraw);
+      else {
+        for (let n = PLAY_COUNT[pattern]; n >= 1 && !res; n--) {
+          const st = tryPlay(base, n, cfg, rng, allowed, canSteal);
+          if (st) res = { action: 'play', moves: st.moves, played: st.played, board: st.board, pool: st.pool, hand: st.hand, drawn: [] };
+        }
+        if (!res) res = drawResult('draw', 1);
+      }
+    }
+    res.blocked = blocked;
+    res.restricted = restricted;
+    res.pattern = pattern;
+    res.stallBefore = stallBefore;
+    res.stall = stallAfterTurn(res.action, res.hand.length, persona.k, res.board, res.drawn.length, cfg);
+    return res;
+  }
+
+  // ---------------------------------------------------------------------------
+  // G_3.5.0 Tactical Practice Radar: Hand & Board Insight Scanner (pure function)
+  // ---------------------------------------------------------------------------
+
+  function findPlayerHandMelds(hand, config) {
+    const cfg = makeConfig(config);
+    const jokers = hand.filter(function (t) { return t.isJoker; });
+    const real = hand.filter(function (t) { return !t.isJoker; });
+    const melds = [];
+    const seenSigs = new Set();
+    const pushMeld = function (tiles) {
+      const arranged = arrangeGroup(tiles);
+      const a = analyzeGroup(arranged, cfg);
+      if (!a.valid) return;
+      const sig = ids(arranged).sort().join(',');
+      if (seenSigs.has(sig)) return;
+      seenSigs.add(sig);
+      melds.push({ tiles: arranged, type: a.type, points: a.points, values: a.values });
+    };
+
+    for (let n = MIN_NUMBER; n <= MAX_NUMBER; n++) {
+      const byColor = {};
+      real.forEach(function (t) { if (t.number === n && !byColor[t.color]) byColor[t.color] = t; });
+      const cols = Object.keys(byColor);
+      if (cols.length >= 3) {
+        combinations(cols, 3).forEach(function (cs) { pushMeld(cs.map(function (c) { return byColor[c]; })); });
+      }
+      if (cols.length === 4) {
+        pushMeld(cols.map(function (c) { return byColor[c]; }));
+      }
+      if (cols.length >= 2 && jokers.length >= 1) {
+        combinations(cols, 2).forEach(function (cs) { pushMeld([byColor[cs[0]], byColor[cs[1]], jokers[0]]); });
+      }
+      if (cfg.sameColorTriple && jokers.length >= 1) {
+        for (const color of COLORS) {
+          const same = real.filter(function (t) { return t.number === n && t.color === color; });
+          if (same.length >= 2) pushMeld([same[0], same[1], jokers[0]]);
+        }
+      }
+    }
+
+    for (const color of COLORS) {
+      const byNum = {};
+      real.forEach(function (t) { if (t.color === color && !byNum[t.number]) byNum[t.number] = t; });
+      for (let len = 3; len <= 5; len++) {
+        for (let s = MIN_NUMBER; s + len - 1 <= MAX_NUMBER; s++) {
+          const slice = [];
+          let missing = 0;
+          for (let k = 0; k < len; k++) {
+            if (byNum[s + k]) slice.push(byNum[s + k]);
+            else missing++;
+          }
+          if (missing === 0) pushMeld(slice);
+          else if (missing === 1 && jokers.length >= 1 && len === 3) pushMeld(slice.concat([jokers[0]]));
+        }
+      }
+    }
+
+    melds.sort(function (a, b) { return b.points - a.points; });
+    return melds;
+  }
+
+  function findBestDisjointMelds(melds) {
+    let best = { points: 0, melds: [] };
+    const limit = Math.min(melds.length, 18);
+    function dfs(idx, usedIds, currentMelds, currentPoints) {
+      if (currentPoints > best.points) {
+        best = { points: currentPoints, melds: currentMelds.slice() };
+      }
+      for (let i = idx; i < limit; i++) {
+        const m = melds[i];
+        if (m.tiles.some(function (t) { return usedIds.has(t.id); })) continue;
+        m.tiles.forEach(function (t) { usedIds.add(t.id); });
+        currentMelds.push(m);
+        dfs(i + 1, usedIds, currentMelds, currentPoints + m.points);
+        currentMelds.pop();
+        m.tiles.forEach(function (t) { usedIds.delete(t.id); });
+      }
+    }
+    dfs(0, new Set(), [], 0);
+    return best;
+  }
+
+  function analyzeHandInsights(board, hand, hasMelded, config) {
+    const cfg = makeConfig(config);
+    const cleanBoard = compactBoard(board || []);
+    const handMelds = findPlayerHandMelds(hand || [], cfg);
+    const bestCombo = findBestDisjointMelds(handMelds);
+    const bestTileIds = [];
+    bestCombo.melds.forEach(function (m) { m.tiles.forEach(function (t) { bestTileIds.push(t.id); }); });
+
+    const extensions = [];
+    const splits = [];
+    if (hasMelded) {
+      cleanBoard.forEach(function (g, gi) {
+        const a = analyzeGroup(g, cfg);
+        (hand || []).forEach(function (t) {
+          if (analyzeGroup([t].concat(g), cfg).valid) {
+            extensions.push({ tileId: t.id, groupIndex: gi, end: 'start' });
+          }
+          if (analyzeGroup(g.concat([t]), cfg).valid) {
+            extensions.push({ tileId: t.id, groupIndex: gi, end: 'end' });
+          }
+          if (!t.isJoker && a.valid && a.type === 'run' && g.length >= 5) {
+            for (let k = 2; k <= g.length - 3; k++) {
+              if (!g[k].isJoker && g[k].color === t.color && g[k].number === t.number) {
+                splits.push({ tileId: t.id, groupIndex: gi, splitIndex: k, boardTileId: g[k].id });
+              }
+            }
+          }
+        });
+      });
+    }
+
+    const stealable = hasMelded ? findStealableBoardTiles(cleanBoard, cfg).map(function (s) { return s.tile.id; }) : [];
+    const canBreak = bestCombo.points >= cfg.iceBreakPoints;
+
+    let hintSummary = '';
+    if (!hasMelded && cfg.iceBreakEnabled) {
+      if (canBreak) {
+        hintSummary = '手牌可破冰！最佳組合共 ' + bestCombo.points + ' 點（' + bestCombo.melds.length + ' 組）';
+      } else if (bestCombo.points > 0) {
+        hintSummary = '手牌目前最高可湊 ' + bestCombo.points + ' 點（距離破冰還差 ' + (cfg.iceBreakPoints - bestCombo.points) + ' 點）';
+      } else {
+        hintSummary = '手牌暫無現成牌組，建議摸牌累積張數';
+      }
+    } else {
+      const extTiles = new Set(extensions.map(function (e) { return e.tileId; })).size;
+      if (handMelds.length > 0 && extTiles > 0) {
+        hintSummary = '手牌可自組 ' + handMelds.length + ' 種牌組，另有 ' + extTiles + ' 張手牌可直接接上桌面';
+      } else if (handMelds.length > 0) {
+        hintSummary = '手牌可獨立湊出 ' + handMelds.length + ' 種合法牌組';
+      } else if (extTiles > 0) {
+        hintSummary = '手牌有 ' + extTiles + ' 張可直接接到桌面牌組頭尾';
+      } else if (splits.length > 0) {
+        hintSummary = '發現長順拆切機會！可用手牌從中間切開桌面長順子';
+      } else {
+        hintSummary = '目前無直接出牌點，可觀察桌面長順／4張刻子進行拆解，或摸 1 張牌';
+      }
+    }
+
+    return {
+      handMelds: handMelds,
+      bestIceBreak: {
+        points: bestCombo.points,
+        canBreak: canBreak,
+        melds: bestCombo.melds,
+        tileIds: bestTileIds,
+      },
+      extensions: extensions,
+      splits: splits,
+      stealableBoardTileIds: stealable,
+      hintSummary: hintSummary,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // G_3.5.0 Built-in Monte Carlo Simulator for the Test Lab (T20)
+  // ---------------------------------------------------------------------------
+
+  // Simulates `gamesCount` games for a given persona under the owner's v3 benchmark specification
+  // (專案說明.html Section 三.3: player draws 50% of turns, plays 3-tile new group 25%, extends 1 tile 25%).
+  function simulatePersonaGames(persona, gamesCount, config, seedBase) {
+    const cfg = makeConfig(config);
+    const count = gamesCount || 400;
+    const turnsList = [];
+    const clearedTurnsList = [];
+    let computerCleared = 0;
+
+    for (let g = 0; g < count; g++) {
+      const rng = createRng((seedBase || 10000) + g * 97 + PERSONAS.indexOf(persona) * 100000);
+      let pool = 106 - cfg.handSize * 2;
+      let hand = cfg.handSize;
+      let groups = 0;
+      let tableTiles = 0;
+      let stall = cfg.stallStart;
+      let last = null;
+      let turns = 0;
+
+      while (turns < 150) {
+        turns++;
+        let u = 0;
+        const pr = rng();
+        if (pr < 0.5) {
+          if (pool > 0) pool--;
+        } else if (pr < 0.75 || groups === 0) {
+          groups += 1;
+          tableTiles += 3;
+          u = 3;
+        } else {
+          tableTiles += 1;
+          u = 2;
+        }
+
+        const sBefore = stallAfterOpponent(stall, u, persona.b);
+        const blocked = rng() < sBefore;
+        const restricted = u > 0 && (last === 'play' || last === 'pass');
+        let action = 'draw', drawn = 0;
+
+        if (blocked) {
+          if (pool > 0) { pool--; hand++; drawn = 1; action = 'draw'; }
+          else action = 'pass';
+        } else {
+          const pat = choosePattern(persona.patterns, hand, groups, rng, cfg, restricted);
+          if (pat === 'foul') {
+            const d = Math.min(cfg.penaltyDraw, pool);
+            if (d > 0) { pool -= d; hand += d; drawn = d; action = 'foul'; }
+            else action = 'pass';
+          } else if (restricted && rng() > 0.7) {
+            if (pool > 0) { pool--; hand++; drawn = 1; action = 'draw'; }
+            else action = 'pass';
+          } else {
+            const n = Math.min(hand, PLAY_COUNT[pat]);
+            hand -= n;
+            tableTiles += n;
+            if (n >= 3 || groups === 0 || (n === 2 && !restricted && cfg.masterSteal && persona.id === 'master' && rng() < 0.35)) {
+              groups++;
+            }
+            action = 'play';
+          }
+        }
+
+        const fakeBoard = Array.from({ length: groups }, function (_, i) {
+          return i === 0 ? Array(Math.max(0, tableTiles - (groups - 1) * 3)).fill({}) : [{}, {}, {}];
+        });
+        stall = stallAfterTurn(action, hand, persona.k, fakeBoard, drawn, cfg);
+        last = action;
+
+        if (hand <= 0) {
+          computerCleared++;
+          clearedTurnsList.push(turns);
+          turnsList.push(turns);
+          break;
+        }
+        if (pool <= 0 && action === 'pass' && pr < 0.5) {
+          turnsList.push(turns);
+          break;
+        }
+      }
+    }
+
+    const baseList = clearedTurnsList.length >= Math.max(5, count * 0.1) ? clearedTurnsList : turnsList;
+    baseList.sort(function (a, b) { return a - b; });
+    const q = function (p) { return baseList[Math.min(baseList.length - 1, Math.floor(baseList.length * p))] || 0; };
+    return {
+      personaId: persona.id,
+      personaName: persona.name,
+      games: count,
+      medianTurns: q(0.5),
+      p10Turns: q(0.1),
+      p90Turns: q(0.9),
+      computerClearRate: Math.round((computerCleared / count) * 100),
+    };
+  }
+
+  // Every tile of the deck must exist exactly once across all zones.
+  function checkConservation(zones) {
+    let all = [];
+    Object.keys(zones).forEach(function (key) {
+      const z = zones[key];
+      all = all.concat(key === 'board' ? boardTiles(z) : z);
+    });
+    const seen = new Set();
+    const duplicates = [];
+    all.forEach(function (t) {
+      if (seen.has(t.id)) duplicates.push(t.id);
+      seen.add(t.id);
+    });
+    const missing = ids(createDeck()).filter(function (id) { return !seen.has(id); });
+    return { ok: duplicates.length === 0 && missing.length === 0 && all.length === 106, total: all.length, duplicates: duplicates, missing: missing };
+  }
+
+  const RummyEngine = {
+    VERSION: 'G_3.5.0',
+    COLORS: COLORS,
+    DEFAULT_CONFIG: DEFAULT_CONFIG,
+    MESSAGES: MESSAGES,
+    PERSONAS: PERSONAS,
+    createRng: createRng,
+    createDeck: createDeck,
+    shuffle: shuffle,
+    dealGame: dealGame,
+    drawFromPool: drawFromPool,
+    analyzeGroup: analyzeGroup,
+    validateBoard: validateBoard,
+    compactBoard: compactBoard,
+    createSnapshot: createSnapshot,
+    restoreSnapshot: restoreSnapshot,
+    checkTurnEnd: checkTurnEnd,
+    applyFailedTurn: applyFailedTurn,
+    applyDraw: applyDraw,
+    handPoints: handPoints,
+    isBlocked: isBlocked,
+    scoreGame: scoreGame,
+    sortByNumber: sortByNumber,
+    sortByColor: sortByColor,
+    arrangeGroup: arrangeGroup,
+    stallAfterTurn: stallAfterTurn,
+    stallAfterOpponent: stallAfterOpponent,
+    countBoardChange: countBoardChange,
+    changedGroups: changedGroups,
+    drawRelief: drawRelief,
+    choosePattern: choosePattern,
+    findMelds: findMelds,
+    findExtensions: findExtensions,
+    findStealableBoardTiles: findStealableBoardTiles,
+    planComputerTurn: planComputerTurn,
+    analyzeHandInsights: analyzeHandInsights,
+    simulatePersonaGames: simulatePersonaGames,
+    checkConservation: checkConservation,
+  };
+
+  root.RummyEngine = RummyEngine;
+  if (typeof module !== 'undefined' && module.exports) module.exports = RummyEngine;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+}</script>
+<script>
+'use strict';
+
+const E = window.RummyEngine;
+const APP_VERSION = 'G_3.5.0';
+const ENGINE_VERSION = 'G_3.5.0';   // must match the <script src> above (D21)
+if (E && E.VERSION !== ENGINE_VERSION) console.warn('RummyLab expects engine ' + ENGINE_VERSION + ' but loaded ' + E.VERSION);
+const STORAGE_KEY = 'rummy-practice-config-v2';
+const COMPUTER_DELAY_MS = 680;       // "thinking" pause before the computer acts
+const COMPUTER_MOVE_MS = 500;        // pause between the computer's moves so each one can be followed
+const GRID_MIN = { cols: 32, rows: 14 };
+const GRID = { cols: GRID_MIN.cols, rows: GRID_MIN.rows };
+const FLY_MS = 380;
+const FLY_STAGGER_MS = 140;
+
+const PERSONA_ICONS = { apprentice: '🎓', steady: '☕', gambler: '🎲', master: '👑' };
+
+// ---------------------------------------------------------------------------
+// Zero-Asset Web Audio Synthesizer for Tactile Melamine Tile Acoustics
+// ---------------------------------------------------------------------------
+const Sound = (function () {
+  let ctx = null;
+  function getCtx() {
+    if (!S.config || !S.config.soundEnabled) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) ctx = new AC();
+    }
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(function () {});
+    return ctx;
+  }
+  function tone(freq, type, dur, gainVal, delay, endFreq) {
+    const c = getCtx();
+    if (!c) return;
+    const t0 = c.currentTime + (delay || 0);
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, t0 + dur);
+    g.gain.setValueAtTime(gainVal || 0.12, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(g);
+    g.connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.01);
+  }
+  return {
+    click: function () {
+      tone(980, 'triangle', 0.035, 0.11, 0, 420);
+    },
+    place: function () {
+      tone(240, 'sine', 0.07, 0.2, 0, 95);
+      tone(1250, 'triangle', 0.03, 0.1, 0.008, 620);
+    },
+    split: function () {
+      tone(660, 'triangle', 0.04, 0.1, 0, 920);
+    },
+    draw: function () {
+      tone(380, 'sine', 0.06, 0.12, 0, 680);
+    },
+    shuffle: function () {
+      for (let i = 0; i < 5; i++) {
+        tone(750 + (i % 3) * 160, 'triangle', 0.03, 0.07, i * 0.032, 360);
+      }
+    },
+    coach: function () {
+      tone(523.25, 'sine', 0.12, 0.1, 0);
+      tone(659.25, 'sine', 0.16, 0.1, 0.07);
+    },
+    win: function () {
+      [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
+        tone(f, 'triangle', 0.22, 0.14, i * 0.08);
+      });
+    },
+    error: function () {
+      tone(190, 'sawtooth', 0.12, 0.09, 0, 140);
+      tone(160, 'sawtooth', 0.15, 0.09, 0.1, 120);
+    }
+  };
+})();
+
+// ---------------------------------------------------------------------------
+// Config. Rules are copied into S.rules when a game starts; display options apply live.
+// Player-adjustable entries are on the setup screen, in "restore defaults" and in the JSON export (rule 6).
+// Persona abilities and the computer pacing constants are fixed in the engine (D23) and never read from storage.
+// ---------------------------------------------------------------------------
+const DEFAULT_CONFIG = Object.assign({}, E.DEFAULT_CONFIG, {
+  opponents: 1,
+  persona: 'steady',
+  iceBreakEnabled: true,
+  timerEnabled: true,
+  turnSeconds: 60,
+  resetPenalty: false,      // "重設本回合" restores, draws the penalty tiles and ends the turn (real-table rule)
+  masterSteal: true,        // allow拉密宗師 to borrow 1 spare tile from 4-tile sets / 4+ run ends (T19)
+  showLabels: true,
+  xrayEnabled: true,        // live X-Ray extension slots & split highlights when selecting/hovering hand tiles
+  soundEnabled: true,       // Web Audio synthesized tile sound effects
+  showDebug: false,
+});
+const FIXED_KEYS = ['stallStart', 'reliefCap', 'reliefPerGroup', 'reliefPerTableTile', 'extendBase', 'pairSameGroup'];
+
+function loadConfig() {
+  const cfg = Object.assign({}, DEFAULT_CONFIG);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      for (const k of Object.keys(DEFAULT_CONFIG)) {
+        if (FIXED_KEYS.indexOf(k) < 0 && typeof saved[k] === typeof DEFAULT_CONFIG[k]) cfg[k] = saved[k];
+      }
+    }
+  } catch (e) { /* storage unavailable: defaults */ }
+  if (!E.PERSONAS.some(p => p.id === cfg.persona)) cfg.persona = DEFAULT_CONFIG.persona;
+  cfg.opponents = 1;
+  return cfg;
+}
+function saveConfig() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S.config)); } catch (e) { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
+// Layout metrics (one source of truth for CSS and hit testing)
+// ---------------------------------------------------------------------------
+const M = {};
+function applyMetrics() {
+  const narrow = window.matchMedia('(max-width: 680px)').matches;
+  M.tw = narrow ? 32 : 40;
+  M.th = narrow ? 46 : 56;
+  M.cw = M.tw + 2;
+  M.lh = 16;
+  M.ch = M.th + M.lh + 10;
+  const st = document.documentElement.style;
+  st.setProperty('--tile-w', M.tw + 'px');
+  st.setProperty('--tile-h', M.th + 'px');
+  st.setProperty('--cell-w', M.cw + 'px');
+  st.setProperty('--cell-h', M.ch + 'px');
+  st.setProperty('--label-h', M.lh + 'px');
+  fitGrid(false);
+}
+
+// Grow the grid to cover the visible board. Shrinking only happens on a new game (fresh = true).
+function fitGrid(fresh) {
+  const b = document.getElementById('board');
+  const needCols = Math.max(GRID_MIN.cols, Math.ceil(b.clientWidth / M.cw));
+  const needRows = Math.max(GRID_MIN.rows, Math.ceil(b.clientHeight / M.ch));
+  GRID.cols = fresh ? needCols : Math.max(GRID.cols, needCols);
+  GRID.rows = fresh ? needRows : Math.max(GRID.rows, needRows);
+  const st = document.documentElement.style;
+  st.setProperty('--cols', GRID.cols);
+  st.setProperty('--rows', GRID.rows);
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const S = {
+  config: loadConfig(),
+  rules: null,
+  seed: 0,
+  pool: [], hand: [], computerHand: [], board: [],
+  nextKey: 1,
+  hasMelded: false,
+  phase: 'idle',            // 'idle' | 'player' | 'computer' | 'over'
+  turnNo: 0,
+  consecutivePasses: 0,
+  gameId: 0,
+  snapshot: null, snapLayout: [], snapPending: new Set(), snapHandIds: new Set(), snapBoardIds: new Set(), snapBoardSig: '',
+  undoStack: [],            // G_3.5.0 step-by-step intra-turn history stack
+  redoStack: [],            // G_3.5.0 step-by-step intra-turn redo stack
+  selected: new Set(),
+  hoverTileId: null,        // currently hovered hand tile ID for live X-Ray preview
+  coachIds: new Set(),      // tile IDs highlighted by the "💡 靈感" coach
+  sortMode: 'color',        // 'number' | 'color' | 'manual'
+  pending: new Set(),       // drawn tiles waiting beside the rack until "理排"
+  arriving: new Set(),      // tiles hidden until their draw animation lands
+  cpuIds: new Set(),        // tiles the computer placed in its last turn (gold outline)
+  compShown: null,
+  compStall: 0.5,
+  oppUnits: 0,
+  playerGroups: [],
+  compLast: null,
+  errors: [],
+  log: [],
+  deadline: null,
+  result: null,
+};
+
+const boardArrays = () => S.board.map(g => g.tiles);
+const groupByKey = key => S.board.find(g => g.key === key);
+const groupOfTile = id => S.board.find(g => g.tiles.some(t => t.id === id));
+const boardSig = groups => groups.map(g => g.map(t => t.id).join(',')).sort().join('|');
+const persona = () => E.PERSONAS.find(p => p.id === (S.rules || S.config).persona);
+
+function findTile(id) {
+  const hi = S.hand.findIndex(t => t.id === id);
+  if (hi >= 0) return { zone: 'rack', tile: S.hand[hi], index: hi };
+  for (const g of S.board) {
+    const i = g.tiles.findIndex(t => t.id === id);
+    if (i >= 0) return { zone: 'board', tile: g.tiles[i], index: i, key: g.key };
+  }
+  return null;
+}
+
+function isDirty() {
+  if (!S.snapshot) return false;
+  if (boardSig(boardArrays()) !== S.snapBoardSig) return true;
+  return S.hand.length !== S.snapHandIds.size || S.hand.some(t => !S.snapHandIds.has(t.id));
+}
+const isLocked = id => S.phase !== 'player' || (!S.hasMelded && S.snapBoardIds.has(id));
+const isNewOnBoard = (id, zone) => zone === 'board' && S.snapHandIds.has(id);
+
+function liveCheck() {
+  return E.checkTurnEnd({ snapshot: S.snapshot, board: boardArrays(), hand: S.hand, hasMelded: S.hasMelded, config: S.rules });
+}
+
+// ---------------------------------------------------------------------------
+// G_3.5.0 Intra-Turn Step-by-Step Undo / Redo Time Machine
+// ---------------------------------------------------------------------------
+function captureTurnStep() {
+  return {
+    board: JSON.parse(JSON.stringify(S.board)),
+    hand: JSON.parse(JSON.stringify(S.hand)),
+    pending: Array.from(S.pending),
+    sortMode: S.sortMode,
+  };
+}
+
+function pushUndoStep() {
+  if (S.phase !== 'player') return;
+  S.undoStack.push(captureTurnStep());
+  if (S.undoStack.length > 40) S.undoStack.shift();
+  S.redoStack = [];
+}
+
+function applyTurnStep(step) {
+  S.board = JSON.parse(JSON.stringify(step.board));
+  S.hand = JSON.parse(JSON.stringify(step.hand));
+  S.pending = new Set(step.pending);
+  S.sortMode = step.sortMode;
+  S.selected.clear();
+  S.coachIds.clear();
+  S.errors = [];
+  render();
+}
+
+function stepUndo() {
+  if (S.phase !== 'player' || !S.undoStack.length) return;
+  S.redoStack.push(captureTurnStep());
+  const prev = S.undoStack.pop();
+  Sound.click();
+  applyTurnStep(prev);
+  toast('↶ 已退回上一步');
+}
+
+function stepRedo() {
+  if (S.phase !== 'player' || !S.redoStack.length) return;
+  S.undoStack.push(captureTurnStep());
+  const next = S.redoStack.pop();
+  Sound.click();
+  applyTurnStep(next);
+  toast('↷ 已重做下一步');
+}
+
+function addLog(text) {
+  S.log.push('第 ' + S.turnNo + ' 回合｜' + text);
+  if (S.log.length > 60) S.log.shift();
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+function assertConservation() {
+  const c = E.checkConservation({ pool: S.pool, board: boardArrays(), playerHand: S.hand, computerHand: S.computerHand });
+  if (!c.ok) { console.error('Tile conservation broken', c); toast('內部錯誤：牌數不一致（請回報）'); }
+  const overlap = findOverlap();
+  if (overlap) { console.error('Groups overlap', overlap); toast('內部錯誤：牌組重疊（請回報）'); }
+}
+
+// ---------------------------------------------------------------------------
+// Table layout & collision-free recursive settle
+// ---------------------------------------------------------------------------
+function fits(row, col, len, ignore) {
+  if (row < 0 || row >= GRID.rows || col < 0 || col + len > GRID.cols) return false;
+  return S.board.every(g => (ignore && ignore.has(g.key)) || g.row !== row ||
+    col + len + 1 <= g.col || g.col + g.tiles.length + 1 <= col);
+}
+
+function findSpot(len, row, col, ignore) {
+  let best = null, bestScore = Infinity;
+  for (let r = 0; r < GRID.rows; r++) {
+    for (let c = 0; c + len <= GRID.cols; c++) {
+      if (!fits(r, c, len, ignore)) continue;
+      const score = Math.abs(r - row) * 4 + Math.abs(c - col);
+      if (score < bestScore) { bestScore = score; best = { row: r, col: c }; }
+    }
+  }
+  return best || { row: Math.max(0, Math.min(row, GRID.rows - 1)), col: Math.max(0, Math.min(col, GRID.cols - len)) };
+}
+
+function planSpot(len, row, col, ignore) {
+  return fits(row, col, len, ignore) ? { row: row, col: col } : findSpot(len, row, col, ignore);
+}
+
+function centerSpot(len) {
+  return findSpot(len, Math.floor(GRID.rows / 2) - 1, Math.floor(GRID.cols / 2) - Math.floor(len / 2), null);
+}
+
+// Recursive settle: after a group grows or moves, push touching neighbours aside and ensure chain stability.
+function settle(g, visited) {
+  const seen = visited || new Set();
+  seen.add(g.key);
+  g.col = Math.max(0, Math.min(g.col, GRID.cols - g.tiles.length));
+  for (const h of S.board) {
+    if (h === g || h.row !== g.row) continue;
+    const apart = g.col + g.tiles.length + 1 <= h.col || h.col + h.tiles.length + 1 <= g.col;
+    if (apart) continue;
+    const c = h.col < g.col ? g.col - h.tiles.length - 1 : g.col + g.tiles.length + 1;
+    const ignore = new Set([h.key]);
+    const s = planSpot(h.tiles.length, h.row, c, ignore);
+    h.row = s.row; h.col = s.col;
+    if (!seen.has(h.key)) settle(h, seen);
+  }
+}
+
+function findOverlap() {
+  for (const a of S.board) for (const b of S.board) {
+    if (a !== b && a.row === b.row && !(a.col + a.tiles.length + 1 <= b.col || b.col + b.tiles.length + 1 <= a.col)) return [a.key, b.key];
+  }
+  return null;
+}
+
+// One-click Tidy Table ("✨ 整理桌面"): neatly arranges all groups around the center of the table.
+// Pure layout change; does not count as playing tiles (D10).
+function tidyTable() {
+  if (!S.board.length || S.phase !== 'player') return;
+  pushUndoStep();
+  const colorIdx = c => E.COLORS.indexOf(c);
+  const sorted = S.board.slice().sort((a, b) => {
+    const aa = E.analyzeGroup(a.tiles, S.rules);
+    const bb = E.analyzeGroup(b.tiles, S.rules);
+    const typeRank = x => x.type === 'run' ? 0 : x.type === 'set' ? 1 : x.type === 'triple' ? 2 : 3;
+    if (typeRank(aa) !== typeRank(bb)) return typeRank(aa) - typeRank(bb);
+    const aFirst = a.tiles.find(t => !t.isJoker);
+    const bFirst = b.tiles.find(t => !t.isJoker);
+    if (aa.type === 'run' && aFirst && bFirst && aFirst.color !== bFirst.color) {
+      return colorIdx(aFirst.color) - colorIdx(bFirst.color);
+    }
+    const aVal = aa.values ? aa.values[0] : (aFirst ? aFirst.number : 99);
+    const bVal = bb.values ? bb.values[0] : (bFirst ? bFirst.number : 99);
+    return aVal - bVal;
+  });
+
+  // Pack neatly into centered rows (up to ~22 cells wide per row)
+  const maxRowSpan = Math.min(24, GRID.cols - 4);
+  const rows = [];
+  let curRow = [], curWidth = 0;
+  for (const g of sorted) {
+    const need = g.tiles.length + (curRow.length ? 2 : 0);
+    if (curRow.length && curWidth + need > maxRowSpan) {
+      rows.push({ groups: curRow, width: curWidth });
+      curRow = [g];
+      curWidth = g.tiles.length;
+    } else {
+      curRow.push(g);
+      curWidth += need;
+    }
+  }
+  if (curRow.length) rows.push({ groups: curRow, width: curWidth });
+
+  const startRow = Math.max(1, Math.floor((GRID.rows - rows.length) / 2));
+  rows.forEach((rObj, ri) => {
+    const r = Math.min(GRID.rows - 1, startRow + ri);
+    let c = Math.max(1, Math.floor((GRID.cols - rObj.width) / 2));
+    rObj.groups.forEach(g => {
+      g.row = r;
+      g.col = c;
+      c += g.tiles.length + 2;
+    });
+  });
+  Sound.shuffle();
+  render();
+  centerView();
+  toast('✨ 已自動對齊整理桌面牌組');
+}
+
+function removeTiles(sel) {
+  S.hand = S.hand.filter(t => !sel.has(t.id));
+  const out = [];
+  for (const g of S.board) {
+    if (!g.tiles.some(t => sel.has(t.id))) { out.push(g); continue; }
+    let run = null, first = true;
+    g.tiles.forEach((t, i) => {
+      if (sel.has(t.id)) { run = null; return; }
+      if (!run) {
+        run = { key: first ? g.key : S.nextKey++, row: g.row, col: g.col + i, tiles: [] };
+        first = false;
+        out.push(run);
+      }
+      run.tiles.push(t);
+    });
+  }
+  S.board = out;
+}
+
+// ---------------------------------------------------------------------------
+// Game flow
+// ---------------------------------------------------------------------------
+function newGame(seed) {
+  S.rules = JSON.parse(JSON.stringify(S.config));
+  S.seed = seed || (1 + Math.floor(Math.random() * 999999));
+  const deal = E.dealGame(S.seed, S.rules);
+  S.pool = deal.pool; S.computerHand = deal.computerHand;
+  S.hand = deal.playerHand;
+  S.gameId++;
+  S.compShown = null;
+  S.pending.clear(); S.arriving.clear(); S.cpuIds.clear(); S.coachIds.clear();
+  if (S.sortMode === 'manual') S.sortMode = 'color';
+  applySort();
+  S.board = []; S.nextKey = 1;
+  S.hasMelded = !S.rules.iceBreakEnabled;
+  S.turnNo = 0; S.consecutivePasses = 0;
+  S.compStall = S.rules.stallStart; S.oppUnits = 0; S.playerGroups = []; S.compLast = null;
+  S.log = []; S.result = null;
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('setup').classList.remove('show');
+  fitGrid(true);
+  startPlayerTurn();
+  addLog('新局開始（牌局編號 ' + S.seed + '，對手：' + persona().name + '）');
+  Sound.shuffle();
+  render();
+  centerView();
+}
+
+function startPlayerTurn() {
+  S.turnNo++;
+  S.phase = 'player';
+  S.snapshot = E.createSnapshot(boardArrays(), S.hand);
+  S.snapLayout = S.board.map(g => ({ row: g.row, col: g.col }));
+  S.snapHandIds = new Set(S.hand.map(t => t.id));
+  S.snapBoardIds = new Set(boardArrays().flat().map(t => t.id));
+  S.snapBoardSig = boardSig(S.snapshot.board);
+  S.snapPending = new Set(S.pending);
+  S.undoStack = [];
+  S.redoStack = [];
+  S.selected.clear();
+  S.coachIds.clear();
+  S.errors = [];
+  S.deadline = S.rules.timerEnabled ? Date.now() + S.rules.turnSeconds * 1000 : null;
+  assertConservation();
+  render();
+}
+
+function restoreBoard(arrays) {
+  S.board = arrays.map((tiles, i) => {
+    const pos = S.snapLayout[i] || centerSpot(tiles.length);
+    return { key: S.nextKey++, row: pos.row, col: pos.col, tiles: tiles };
+  });
+}
+
+function endTurn() {
+  if (S.phase !== 'player' || !isDirty()) return;
+  const res = liveCheck();
+  if (!res.ok) {
+    S.errors = res.errors;
+    Sound.error();
+    render();
+    return;
+  }
+  commitTurn(res, '');
+}
+
+function commitTurn(res, prefix) {
+  const first = !S.hasMelded;
+  S.hasMelded = true;
+  S.consecutivePasses = 0;
+  S.oppUnits = E.countBoardChange(S.snapshot.board, boardArrays(), res.playedIds);
+  S.playerGroups = E.changedGroups(S.snapshot.board, boardArrays());
+  addLog(prefix + '你打出 ' + res.playedIds.length + ' 張' + (first ? '（破冰 ' + res.meldPoints + ' 點）' : ''));
+  if (first) Sound.win(); else Sound.place();
+  if (S.hand.length === 0) return finishGame();
+  startComputerTurn();
+}
+
+function resetTurn() {
+  if (S.phase !== 'player' || !S.snapshot) return;
+  if (S.rules.resetPenalty && isDirty()) {
+    if (!confirm('重設本回合會罰摸 ' + S.rules.penaltyDraw + ' 張並結束回合，確定嗎？')) return;
+    failTurn('重設本回合');
+    return;
+  }
+  const r = E.restoreSnapshot(S.snapshot);
+  restoreBoard(r.board);
+  S.hand = r.hand;
+  S.pending = new Set(S.snapPending);
+  S.undoStack = [];
+  S.redoStack = [];
+  if (S.sortMode !== 'manual') applySort();
+  S.selected.clear();
+  S.coachIds.clear();
+  S.errors = [];
+  Sound.shuffle();
+  toast('已還原到本回合開始的狀態');
+  render();
+}
+
+function addDrawnToPlayer(drawn) {
+  S.hand = S.hand.concat(drawn);
+  drawn.forEach(t => { S.pending.add(t.id); S.arriving.add(t.id); });
+}
+
+function playerDraw(prefix) {
+  if (S.phase !== 'player') return;
+  if (isDirty()) { Sound.error(); toast('桌面或手牌已變動：請先「重設本回合」或退回上一步才能摸牌'); return; }
+  let drawn = [];
+  S.oppUnits = 0;
+  S.playerGroups = [];
+  if (S.pool.length === 0) {
+    S.consecutivePasses++;
+    addLog((prefix || '') + '你 Pass（牌池已空）');
+  } else {
+    const d = E.drawFromPool(S.pool, 1);
+    S.pool = d.pool;
+    drawn = d.drawn;
+    addDrawnToPlayer(drawn);
+    S.consecutivePasses = 0;
+    Sound.draw();
+    addLog((prefix || '') + '你摸了 1 張');
+  }
+  if (E.isBlocked(S.pool.length, S.consecutivePasses)) return finishGame();
+  startComputerTurn();
+  flyToPlayer(drawn);
+}
+
+function handleTimeout() {
+  if (S.phase !== 'player') return;
+  S.deadline = null;
+  if (!isDirty()) { playerDraw('時間到，'); return; }
+  const res = liveCheck();
+  if (res.ok) { commitTurn(res, '時間到，'); return; }
+  failTurn('時間到，重組未完成');
+}
+
+function failTurn(reason) {
+  const f = E.applyFailedTurn(S.snapshot, S.pool, S.rules);
+  restoreBoard(f.board);
+  S.hand = f.hand.slice(0, f.hand.length - f.drawn.length);
+  S.pending = new Set(S.snapPending);
+  S.pool = f.pool;
+  addDrawnToPlayer(f.drawn);
+  S.consecutivePasses = 0;
+  S.oppUnits = 0;
+  S.playerGroups = [];
+  Sound.error();
+  addLog(reason + '：還原並罰摸 ' + f.drawn.length + ' 張');
+  toast(reason + '！還原並罰摸 ' + f.drawn.length + ' 張');
+  startComputerTurn();
+  flyToPlayer(f.drawn);
+}
+
+const tileName = t => t.isJoker ? '百搭' : COLOR_NAME[t.color] + t.number;
+
+function startComputerTurn() {
+  S.phase = 'computer';
+  S.deadline = null;
+  S.selected.clear();
+  S.coachIds.clear();
+  S.errors = [];
+  S.cpuIds.clear();
+  render();
+  const game = S.gameId;
+  setTimeout(() => runComputerTurn(game), COMPUTER_DELAY_MS);
+}
+
+function runComputerTurn(game) {
+  if (S.phase !== 'computer' || S.gameId !== game) return;
+  const plan = E.planComputerTurn({
+    board: boardArrays(), pool: S.pool, hand: S.computerHand,
+    persona: persona(), stall: S.compStall, opponentUnits: S.oppUnits, playerGroups: S.playerGroups,
+    lastAction: S.compLast, config: S.rules,
+  });
+  if (S.config.showDebug) addLog(debugLine(plan));
+  S.compStall = plan.stall;
+  S.compLast = plan.action;
+
+  if (plan.action === 'pass') {
+    S.consecutivePasses++;
+    addLog('電腦 Pass（牌池已空）');
+    return afterComputerTurn();
+  }
+  if (plan.action === 'draw' || plan.action === 'foul') {
+    S.pool = plan.pool; S.computerHand = plan.hand;
+    S.consecutivePasses = 0;
+    if (plan.action === 'foul') {
+      Sound.error();
+      addLog('電腦拆牌超時犯規，罰摸 ' + plan.drawn.length + ' 張');
+      toast('電腦犯規！罰摸 ' + plan.drawn.length + ' 張');
+    } else {
+      Sound.draw();
+      addLog('電腦摸了 1 張');
+    }
+    afterComputerTurn();
+    flyToComputer(plan.drawn.length);
+    return;
+  }
+
+  S.compShown = S.computerHand.length;
+  S.pool = plan.pool; S.computerHand = plan.hand;
+  S.consecutivePasses = 0;
+  let i = 0;
+  const step = () => {
+    if (S.phase !== 'computer' || S.gameId !== game) return;
+    if (i >= plan.moves.length) {
+      S.compShown = null;
+      if (boardSig(boardArrays()) !== boardSig(plan.board)) console.error('Computer board mismatch', boardArrays(), plan.board);
+      const stealNote = plan.moves.some(m => m.type === 'steal') ? '（借用桌面 1 張湊新組）' : '';
+      addLog('電腦出了 ' + plan.played.length + ' 張' + stealNote + '：' + plan.played.map(tileName).join('、'));
+      if (S.computerHand.length === 0) return finishGame();
+      return afterComputerTurn();
+    }
+    const mv = plan.moves[i++];
+    const info = applyComputerMove(mv);
+    S.compShown -= info.rackCount;
+    Sound.place();
+    render();
+    flyFromComputer(info.flyTiles);
+    setTimeout(step, COMPUTER_MOVE_MS);
+  };
+  step();
+}
+
+const PATTERN_NAMES = { play1: '出 1 張', play2: '出 2 張', play3: '出 3 張新組', play4: '出 4 張', foul: '犯規' };
+const pct = v => Math.round(v * 100) + '%';
+
+function debugLine(plan) {
+  const stage = plan.blocked ? '卡住（無牌可出）' : '可出牌' + (plan.restricted ? '（只能接你的牌組）' : '') + ' → ' + PATTERN_NAMES[plan.pattern] +
+    (plan.action === 'draw' ? '（做不到，改摸牌）' : plan.action === 'play' && plan.played.length < (+plan.pattern.slice(-1) || 0) ? '（只做到 ' + plan.played.length + ' 張）' : '');
+  return '［除錯］對手變化 ' + S.oppUnits + ' 單位｜S ' + pct(S.compStall) + ' → ' + pct(plan.stallBefore) +
+    '｜' + stage + '｜回合結束 S = ' + pct(plan.stall);
+}
+
+function afterComputerTurn() {
+  if (E.isBlocked(S.pool.length, S.consecutivePasses)) return finishGame();
+  startPlayerTurn();
+}
+
+// Applies one engine move to the keyed, positioned board. Supports 'new', 'extend', and 'steal' (T19).
+function applyComputerMove(mv) {
+  if (mv.type === 'steal') {
+    const srcG = S.board[mv.fromGroup];
+    if (srcG) {
+      srcG.tiles.splice(mv.fromIndex, 1);
+      if (mv.fromIndex === 0) srcG.col += 1;
+    }
+    const spot = centerSpot(mv.tiles.length);
+    S.board.push({ key: S.nextKey++, row: spot.row, col: spot.col, tiles: mv.tiles.slice() });
+    mv.tiles.forEach(t => S.cpuIds.add(t.id));
+    mv.playedTiles.forEach(t => S.arriving.add(t.id));
+    return { flyTiles: mv.playedTiles, rackCount: mv.playedTiles.length };
+  }
+  const placed = mv.type === 'new' ? mv.tiles : [mv.tile];
+  if (mv.type === 'new') {
+    const spot = centerSpot(mv.tiles.length);
+    S.board.push({ key: S.nextKey++, row: spot.row, col: spot.col, tiles: mv.tiles.slice() });
+  } else {
+    const g = S.board[mv.group];
+    if (mv.end === 'start') { g.tiles.unshift(mv.tile); g.col -= 1; } else g.tiles.push(mv.tile);
+    settle(g);
+  }
+  placed.forEach(t => { S.cpuIds.add(t.id); S.arriving.add(t.id); });
+  return { flyTiles: placed, rackCount: placed.length };
+}
+
+function finishGame() {
+  S.phase = 'over';
+  S.deadline = null;
+  S.selected.clear();
+  S.coachIds.clear();
+  S.result = E.scoreGame(S.hand, S.computerHand, S.rules);
+  if (S.result.winner === 'player') Sound.win(); else Sound.error();
+  addLog(S.result.winner === 'player' ? '你獲勝！' : S.result.winner === 'computer' ? '電腦獲勝' : '平手');
+  assertConservation();
+  render();
+  renderResult();
+}
+
+// ---------------------------------------------------------------------------
+// G_3.5.0 Tactical Coach ("💡 靈感")
+// ---------------------------------------------------------------------------
+let coachTimer = null;
+function triggerCoach() {
+  if (S.phase !== 'player') return;
+  const ins = E.analyzeHandInsights(boardArrays(), S.hand, S.hasMelded, S.rules);
+  S.coachIds.clear();
+  if (!S.hasMelded && S.rules.iceBreakEnabled) {
+    ins.bestIceBreak.tileIds.forEach(id => S.coachIds.add(id));
+  } else {
+    if (ins.handMelds.length > 0) {
+      ins.handMelds[0].tiles.forEach(t => S.coachIds.add(t.id));
+    }
+    ins.extensions.forEach(e => S.coachIds.add(e.tileId));
+    ins.splits.forEach(sp => { S.coachIds.add(sp.tileId); S.coachIds.add(sp.boardTileId); });
+  }
+  Sound.coach();
+  toast('💡 ' + ins.hintSummary);
+  render();
+  clearTimeout(coachTimer);
+  coachTimer = setTimeout(() => { S.coachIds.clear(); render(); }, 3800);
+}
+
+// ---------------------------------------------------------------------------
+// Rack sorting
+// ---------------------------------------------------------------------------
+const SORT_NAMES = { number: '數字', color: '顏色', manual: '自訂' };
+
+function normalizeHand() {
+  const ids = new Set(S.hand.map(t => t.id));
+  for (const id of S.pending) if (!ids.has(id)) S.pending.delete(id);
+  S.hand = S.hand.filter(t => !S.pending.has(t.id)).concat(S.hand.filter(t => S.pending.has(t.id)));
+}
+
+function applySort() {
+  const main = S.hand.filter(t => !S.pending.has(t.id));
+  const waiting = S.hand.filter(t => S.pending.has(t.id));
+  const sorted = S.sortMode === 'number' ? E.sortByNumber(main) : S.sortMode === 'color' ? E.sortByColor(main) : main;
+  S.hand = sorted.concat(waiting);
+}
+
+function organize(forceMode) {
+  if (S.phase === 'idle' || S.phase === 'over') return;
+  pushUndoStep();
+  S.pending.clear();
+  if (forceMode === 'number' || forceMode === 'color') S.sortMode = forceMode;
+  else S.sortMode = S.sortMode === 'number' ? 'color' : 'number';
+  applySort();
+  Sound.shuffle();
+  render();
+}
+
+function rackGroupKey(t) {
+  if (t.isJoker) return 'J';
+  if (S.sortMode === 'number') return 'n' + t.number;
+  if (S.sortMode === 'color') return 'c' + t.color;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pool pile and draw animation
+// ---------------------------------------------------------------------------
+function renderPool() {
+  const n = S.pool.length;
+  let html = '';
+  for (let i = 0; i < Math.ceil(n / 10); i++) {
+    const k = Math.min(10, n - i * 10);
+    html += '<span class="stack" style="height:' + (6 + k * 2.4) + 'px" title="' + k + ' 張"></span>';
+  }
+  document.getElementById('poolPile').innerHTML = html;
+}
+
+function poolOrigin() {
+  const stacks = document.querySelectorAll('#poolPile .stack');
+  const el = stacks.length ? stacks[stacks.length - 1] : document.getElementById('poolPile');
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top };
+}
+
+function flyOne(from, to, delay, done) {
+  setTimeout(() => {
+    const el = document.createElement('div');
+    el.className = 'tile-back flying';
+    el.style.left = (from.x - 12) + 'px';
+    el.style.top = (from.y - 16) + 'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transform = 'translate(' + (to.x - from.x) + 'px,' + (to.y - from.y) + 'px)';
+    }));
+    setTimeout(() => { el.remove(); if (done) done(); }, FLY_MS + 30);
+  }, delay);
+}
+
+function reveal(id) {
+  S.arriving.delete(id);
+  const node = document.querySelector('.tile[data-id="' + id + '"]');
+  if (node) node.classList.remove('arriving');
+}
+
+function flyToPlayer(tiles) {
+  const from = poolOrigin();
+  tiles.forEach((t, i) => {
+    const node = document.querySelector('#rack .tile[data-id="' + t.id + '"]');
+    if (!node) { reveal(t.id); return; }
+    const r = node.getBoundingClientRect();
+    flyOne(from, { x: r.left + r.width / 2, y: r.top + r.height / 2 }, i * FLY_STAGGER_MS, () => reveal(t.id));
+  });
+}
+
+function compRackEnd() {
+  const backs = document.querySelectorAll('#compRack .back');
+  const el = backs.length ? backs[backs.length - 1] : document.getElementById('compRack');
+  const r = el.getBoundingClientRect();
+  return { x: Math.min(r.left + r.width / 2, window.innerWidth - 20), y: r.top + r.height / 2 };
+}
+
+function flyToComputer(count) {
+  if (!count) return;
+  const from = poolOrigin();
+  const to = compRackEnd();
+  for (let i = 0; i < count; i++) flyOne(from, to, i * FLY_STAGGER_MS);
+}
+
+function flyFromComputer(tiles) {
+  const from = compRackEnd();
+  tiles.forEach((t, i) => {
+    const node = document.querySelector('#table .tile[data-id="' + t.id + '"]');
+    if (!node) { reveal(t.id); return; }
+    if (i === 0) node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const r = node.getBoundingClientRect();
+    flyOne(from, { x: r.left + r.width / 2, y: r.top + r.height / 2 }, i * FLY_STAGGER_MS, () => reveal(t.id));
+  });
+}
+
+function renderCompRack() {
+  const n = S.compShown !== null ? S.compShown : S.computerHand.length;
+  document.getElementById('compRack').innerHTML = '<span class="back"></span>'.repeat(n);
+  const p = S.rules ? persona() : null;
+  const icon = p ? (PERSONA_ICONS[p.id] || '🤖') + ' ' : '';
+  const dbg = S.config.showDebug && S.rules ? '｜受阻 S=' + pct(S.compStall) : '';
+  document.getElementById('compWho').textContent = (p ? icon + p.name : '電腦') + '｜' + n + ' 張' + dbg;
+  document.getElementById('compThinking').textContent = S.phase === 'computer' ? '出牌思考中…' : '';
+}
+
+// ---------------------------------------------------------------------------
+// Moving tiles
+// ---------------------------------------------------------------------------
+function selectionInOrder() {
+  const out = [];
+  for (const t of S.hand) if (S.selected.has(t.id)) out.push(t.id);
+  for (const g of S.board) for (const t of g.tiles) if (S.selected.has(t.id)) out.push(t.id);
+  return out;
+}
+
+function wholeGroupSelected() {
+  if (!S.selected.size) return null;
+  const g = groupOfTile(S.selected.values().next().value);
+  return g && g.tiles.length === S.selected.size && g.tiles.every(t => S.selected.has(t.id)) ? g : null;
+}
+
+function selectionTiles() {
+  return selectionInOrder().map(id => findTile(id).tile);
+}
+
+function selectionFormsGroup() {
+  if (S.selected.size < 3 || wholeGroupSelected()) return false;
+  return E.analyzeGroup(E.arrangeGroup(selectionTiles()), S.rules).valid;
+}
+
+function applyTarget(target, grabId) {
+  if (S.phase !== 'player' || !target) return;
+  const ids = selectionInOrder();
+  if (!ids.length) return;
+  if (ids.some(isLocked)) { Sound.error(); toast('尚未破冰，不能移動桌面上的牌'); return; }
+  if (target.type === 'rack' && ids.some(id => !S.snapHandIds.has(id))) { Sound.error(); toast('桌面上的牌不能收回手牌'); return; }
+  if (target.type === 'insert') {
+    const tg = groupByKey(target.key);
+    if (!tg) return;
+    if (tg.tiles.some(t => isLocked(t.id))) { Sound.error(); toast('尚未破冰，不能變動桌面上的牌組'); return; }
+  }
+  pushUndoStep();
+  const sel = new Set(ids);
+
+  const whole = wholeGroupSelected();
+  if (whole && (target.type === 'cell' || target.type === 'center')) {
+    const ignore = new Set([whole.key]);
+    let spot;
+    if (target.type === 'center') spot = centerSpot(whole.tiles.length);
+    else {
+      const gi = Math.max(0, whole.tiles.findIndex(t => t.id === grabId));
+      spot = planSpot(whole.tiles.length, target.row, target.col - gi, ignore);
+    }
+    whole.row = spot.row; whole.col = spot.col;
+    Sound.place();
+    return finishMove();
+  }
+
+  let anchor = null;
+  if (target.type === 'insert') {
+    const g = groupByKey(target.key);
+    for (let i = target.pos; i < g.tiles.length && !anchor; i++) if (!sel.has(g.tiles[i].id)) anchor = { before: g.tiles[i].id };
+    for (let i = target.pos - 1; i >= 0 && !anchor; i--) if (!sel.has(g.tiles[i].id)) anchor = { after: g.tiles[i].id };
+    if (!anchor) target = { type: 'cell', row: g.row, col: g.col };
+  }
+  let rackAnchor = null;
+  if (target.type === 'rack') {
+    for (let i = target.pos; i < S.hand.length; i++) if (!sel.has(S.hand[i].id)) { rackAnchor = S.hand[i].id; break; }
+  }
+
+  const moving = ids.map(id => findTile(id).tile);
+  const fromRackOnly = ids.every(id => S.hand.some(t => t.id === id));
+  let spot = null, arranged = null;
+  if (target.type === 'cell' || target.type === 'center') {
+    arranged = E.arrangeGroup(moving);
+    if (target.type === 'center') spot = centerSpot(arranged.length);
+    else {
+      const gi = grabId ? Math.max(0, arranged.findIndex(t => t.id === grabId)) : 0;
+      spot = planSpot(arranged.length, target.row, target.col - gi, null);
+    }
+  }
+
+  removeTiles(sel);
+
+  if (arranged) {
+    S.board.push({ key: S.nextKey++, row: spot.row, col: spot.col, tiles: arranged });
+  } else if (target.type === 'insert') {
+    const id = anchor.before || anchor.after;
+    const g = groupOfTile(id);
+    let at = g.tiles.findIndex(t => t.id === id);
+    if (anchor.after) at++;
+    g.tiles.splice(at, 0, ...moving);
+    if (at === 0) g.col -= moving.length;
+    settle(g);
+  } else {
+    const at = rackAnchor ? S.hand.findIndex(t => t.id === rackAnchor) : S.hand.length;
+    S.hand.splice(at < 0 ? S.hand.length : at, 0, ...moving);
+    moving.forEach(t => S.pending.delete(t.id));
+    normalizeHand();
+    if (fromRackOnly) S.sortMode = 'manual';
+    else applySort();
+  }
+  Sound.place();
+  finishMove();
+}
+
+function finishMove() {
+  S.selected.clear();
+  S.coachIds.clear();
+  S.errors = [];
+  const overlap = findOverlap();
+  if (overlap) console.error('Groups overlap after move', overlap);
+  render();
+}
+
+// G_3.5.0 fix: if splitting near the right edge of the table would push `right` out of bounds,
+// shift the left half `g` 1 cell left first so the two halves keep their 1-cell gap without colliding.
+function splitGroup(key, pos) {
+  const g = groupByKey(key);
+  if (!g || pos <= 0 || pos >= g.tiles.length) return;
+  if (g.tiles.some(t => isLocked(t.id))) { Sound.error(); toast('尚未破冰，不能變動桌面上的牌組'); return; }
+  pushUndoStep();
+  const rightTiles = g.tiles.slice(pos);
+  g.tiles = g.tiles.slice(0, pos);
+  let rightCol = g.col + pos + 1;
+  if (rightCol + rightTiles.length > GRID.cols && g.col > 0) {
+    g.col -= 1;
+    rightCol -= 1;
+    settle(g);
+  }
+  const right = { key: S.nextKey++, row: g.row, col: rightCol, tiles: rightTiles };
+  S.board.push(right);
+  settle(right);
+  S.errors = [];
+  Sound.split();
+  render();
+}
+
+function selectGroup(key) {
+  const g = groupByKey(key);
+  if (!g || S.phase !== 'player') return;
+  if (g.tiles.some(t => isLocked(t.id))) { Sound.error(); toast('尚未破冰，不能移動桌面上的牌'); return; }
+  S.selected.clear();
+  g.tiles.forEach(t => S.selected.add(t.id));
+  Sound.click();
+  render();
+}
+
+function toggleSelect(id) {
+  if (S.phase !== 'player') return;
+  if (isLocked(id)) { Sound.error(); toast('尚未破冰，不能移動桌面上的牌'); return; }
+  if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
+  Sound.click();
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Rendering & Custom Dual-Color SVG Joker Emblem
+// ---------------------------------------------------------------------------
+const SHORT_REASON = {
+  too_short: '少於 3 張', set_too_long: '刻子最多 4 張', set_number_mismatch: '數字不同', set_duplicate_color: '顏色重複',
+  run_too_long: '順子最多 13 張', run_color_mismatch: '顏色不同', run_not_consecutive: '數字不連續',
+  run_out_of_range: '超出 1～13', all_jokers: '需有數字牌',
+};
+const COLOR_NAME = { red: '紅', blue: '藍', black: '黑', orange: '橘' };
+
+function jokerSvg() {
+  return '<svg class="joker-svg" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M7 15 C5 8, 12 6, 18 12 C24 6, 31 8, 29 15" fill="currentColor" fill-opacity="0.14"/>' +
+    '<circle cx="6" cy="14" r="1.8" fill="currentColor"/><circle cx="30" cy="14" r="1.8" fill="currentColor"/><circle cx="18" cy="7" r="1.8" fill="currentColor"/>' +
+    '<circle cx="18" cy="21" r="10"/>' +
+    '<circle cx="14.5" cy="19" r="1.3" fill="currentColor"/><circle cx="21.5" cy="19" r="1.3" fill="currentColor"/>' +
+    '<path d="M13.5 23.5 Q18 27.5 22.5 23.5"/>' +
+    '</svg>';
+}
+
+// Computes active X-Ray targets for a single active hand tile (selected or hovered)
+function computeActiveXray() {
+  if (!S.config.xrayEnabled || S.phase !== 'player' || !S.hasMelded) return { extByGroup: {}, matchBoardTileIds: new Set(), focusTileId: null };
+  let focusId = null;
+  if (S.selected.size === 1) {
+    const onlyId = S.selected.values().next().value;
+    if (S.hand.some(t => t.id === onlyId)) focusId = onlyId;
+  } else if (S.selected.size === 0 && S.hoverTileId && S.hand.some(t => t.id === S.hoverTileId)) {
+    focusId = S.hoverTileId;
+  }
+  if (!focusId) return { extByGroup: {}, matchBoardTileIds: new Set(), focusTileId: null };
+  const tile = S.hand.find(t => t.id === focusId);
+  if (!tile) return { extByGroup: {}, matchBoardTileIds: new Set(), focusTileId: null };
+
+  const extByGroup = {};
+  const matchBoardTileIds = new Set();
+  S.board.forEach(g => {
+    const canStart = E.analyzeGroup([tile].concat(g.tiles), S.rules).valid;
+    const canEnd = E.analyzeGroup(g.tiles.concat([tile]), S.rules).valid;
+    if (canStart || canEnd) extByGroup[g.key] = { start: canStart, end: canEnd };
+    const a = E.analyzeGroup(g.tiles, S.rules);
+    if (!tile.isJoker && a.valid && a.type === 'run' && g.tiles.length >= 5) {
+      for (let k = 2; k <= g.tiles.length - 3; k++) {
+        if (!g.tiles[k].isJoker && g.tiles[k].color === tile.color && g.tiles[k].number === tile.number) {
+          matchBoardTileIds.add(g.tiles[k].id);
+        }
+      }
+    }
+  });
+  return { extByGroup: extByGroup, matchBoardTileIds: matchBoardTileIds, focusTileId: focusId };
+}
+
+function tileHtml(t, zone, pos, key, xraySet) {
+  const cls = ['tile', t.isJoker ? ('c-joker' + (t.id === 'J2' ? ' j-black' : '')) : 'c-' + t.color];
+  if (S.selected.has(t.id)) cls.push('sel');
+  if (isNewOnBoard(t.id, zone)) cls.push('new');
+  if (zone && S.arriving.has(t.id)) cls.push('arriving');
+  if (zone === 'board' && S.cpuIds.has(t.id)) cls.push('cpu');
+  if (zone === 'board' && S.phase === 'player' && isLocked(t.id)) cls.push('locked');
+  if (S.coachIds.has(t.id)) cls.push('coach-glow');
+  if (xraySet && xraySet.has(t.id)) cls.push('xray-match');
+  const title = t.isJoker ? '百搭' : COLOR_NAME[t.color] + t.number;
+  const data = zone ? ' data-zone="' + zone + '" data-pos="' + pos + '"' + (key ? ' data-key="' + key + '"' : '') : '';
+  const inner = t.isJoker ? jokerSvg() : '<span>' + t.number + '</span>';
+  return '<div class="' + cls.join(' ') + '" data-id="' + t.id + '"' + data + ' title="' + title + '">' + inner + '</div>';
+}
+
+function groupLabel(a) {
+  if (!a.valid) return SHORT_REASON[a.reason] || '不合法';
+  if (a.type === 'run') return '順 ' + a.values[0] + '–' + a.values[a.values.length - 1] + '｜' + a.points;
+  if (a.type === 'triple') return '同 ' + a.values[0] + '｜' + a.points;
+  return '刻 ' + a.values[0] + '｜' + a.points;
+}
+
+function renderBoard() {
+  const xray = computeActiveXray();
+  const cx = GRID.cols * M.cw / 2;
+  const cy = Math.floor(GRID.rows / 2) * M.ch;
+  const pName = S.rules ? persona().name : '未開局';
+  const iceTxt = S.rules ? (S.rules.iceBreakEnabled ? '破冰 ' + S.rules.iceBreakPoints + ' 點' : '免破冰') : '';
+  let html = '<div class="table-crest" style="left:' + cx + 'px;top:' + cy + 'px">' +
+    '<div class="crest-title">RUMMYLAB CLUB</div>' +
+    '<div class="crest-sub">對手：' + pName + (iceTxt ? '｜' + iceTxt : '') + (S.seed ? '｜#' + S.seed : '') + '</div>' +
+    '</div>';
+
+  for (const g of S.board) {
+    const a = E.analyzeGroup(g.tiles, S.rules);
+    html += '<div class="group' + (a.valid ? '' : ' invalid') + '" data-key="' + g.key + '" style="left:' + (g.col * M.cw) + 'px;top:' + (g.row * M.ch + M.lh) + 'px">';
+    if (S.config.showLabels) html += '<span class="glabel">' + groupLabel(a) + '</span>';
+    const gx = xray.extByGroup[g.key];
+    if (gx && gx.start && g.col > 0) {
+      html += '<div class="xray-ext" data-xray-key="' + g.key + '" data-xray-pos="0" data-xray-tile="' + xray.focusTileId + '" style="left:' + (-M.cw) + 'px" title="點擊直接將手牌接在此牌組前端">＋</div>';
+    }
+    g.tiles.forEach((t, i) => { html += tileHtml(t, 'board', i, g.key, xray.matchBoardTileIds); });
+    if (gx && gx.end && g.col + g.tiles.length < GRID.cols) {
+      html += '<div class="xray-ext" data-xray-key="' + g.key + '" data-xray-pos="' + g.tiles.length + '" data-xray-tile="' + xray.focusTileId + '" style="left:' + (g.tiles.length * M.cw) + 'px" title="點擊直接將手牌接在此牌組尾端">＋</div>';
+    }
+    if (S.phase === 'player') {
+      for (let i = 1; i < g.tiles.length; i++) {
+        html += '<span class="seam" data-key="' + g.key + '" data-pos="' + i + '" style="left:' + (i * M.cw - 5) + 'px" title="點擊切開牌組"></span>';
+      }
+    }
+    html += '</div>';
+  }
+  if (!S.board.length && S.phase === 'player') {
+    html += '<div class="table-hint" style="left:' + cx + 'px;top:' + (cy + 58) + 'px">' +
+      '選取手牌組成合法牌組，按<b>空白鍵</b>或「出牌到桌面」，<br>也可直接拖曳到桌面任意位置（或按 💡 靈感）</div>';
+  }
+  html += '<div id="preview"></div>';
+  document.getElementById('table').innerHTML = html;
+}
+
+function renderRack() {
+  let html = '';
+  let prev = null, inPending = false;
+  S.hand.forEach((t, i) => {
+    const pending = S.pending.has(t.id);
+    if (pending && !inPending) {
+      html += '<span class="slot" data-pos="' + i + '"></span><span class="pending-sep">新牌</span>';
+      inPending = true;
+    } else if (i > 0) {
+      const key = rackGroupKey(t);
+      const cls = inPending ? 'tight' : key === null ? '' : key === prev ? 'tight' : 'gap';
+      html += '<span class="slot ' + cls + '" data-pos="' + i + '"></span>';
+    } else {
+      html += '<span class="slot" data-pos="0"></span>';
+    }
+    prev = rackGroupKey(t);
+    html += tileHtml(t, 'rack', i);
+  });
+  html += '<span class="slot" data-pos="' + S.hand.length + '"></span>';
+  document.getElementById('rack').innerHTML = html;
+}
+
+function renderStatus() {
+  const myTurn = S.phase === 'player';
+  const dirty = myTurn && isDirty();
+  document.getElementById('sPool').textContent = S.pool.length;
+
+  const soundBtn = document.getElementById('btnSound');
+  soundBtn.textContent = S.config.soundEnabled ? '🔊 音效' : '🔇 靜音';
+  soundBtn.classList.toggle('active-toggle', !!S.config.soundEnabled);
+
+  let info = '', meld = '';
+  if (S.rules && S.rules.iceBreakEnabled && !S.hasMelded) meld = '尚未破冰';
+  if (myTurn) {
+    const res = liveCheck();
+    info = '第 ' + S.turnNo + ' 回合｜輪到你｜手牌 <b>' + S.hand.length + '</b> 張｜本回合已出 <b>' + res.playedIds.length + '</b> 張';
+    if (!S.hasMelded) meld = '破冰 <b>' + res.meldPoints + '</b> / ' + S.rules.iceBreakPoints + ' 點';
+  } else if (S.phase === 'computer') info = '第 ' + S.turnNo + ' 回合｜電腦思考中…';
+  else if (S.phase === 'over') info = '本局結束';
+  else info = '請先完成新局設定';
+  document.getElementById('sMeld').innerHTML = meld;
+  document.getElementById('turnInfo').innerHTML = info;
+
+  const formsGroup = myTurn && selectionFormsGroup();
+  document.getElementById('hint').textContent = formsGroup ? '已選成一組：按空白鍵或「出牌到桌面」' : (wholeGroupSelected() ? '已選取整組：可拖到新位置' : '');
+  document.getElementById('btnPlace').classList.toggle('invisible', !formsGroup);
+  document.getElementById('btnClear').classList.toggle('invisible', !S.selected.size);
+  document.getElementById('btnEnd').disabled = !myTurn || !dirty;
+  const resetBtn = document.getElementById('btnReset');
+  resetBtn.disabled = !myTurn || !dirty;
+  resetBtn.textContent = S.rules && S.rules.resetPenalty ? '重設本回合（罰 ' + S.rules.penaltyDraw + ' 張）' : '重設本回合';
+  const drawBtn = document.getElementById('btnDraw');
+  drawBtn.disabled = !myTurn || dirty;
+  drawBtn.textContent = S.pool.length || S.phase === 'idle' ? '摸牌' : 'Pass';
+  const sortBtn = document.getElementById('btnSort');
+  sortBtn.textContent = '理排（' + SORT_NAMES[S.sortMode] + '）';
+  sortBtn.disabled = S.phase === 'idle' || S.phase === 'over';
+
+  document.getElementById('btnUndo').disabled = !myTurn || !S.undoStack.length;
+  document.getElementById('btnRedo').disabled = !myTurn || !S.redoStack.length;
+  document.getElementById('btnTidy').disabled = !myTurn || !S.board.length;
+  document.getElementById('btnCoach').disabled = !myTurn;
+
+  const errEl = document.getElementById('errors');
+  if (S.errors.length) {
+    const items = S.errors.map(e => {
+      let msg = e.message;
+      if (e.code === 'invalid_group') msg += '：' + (SHORT_REASON[e.reason] || e.reasonMessage);
+      if (e.code === 'ice_break_insufficient') msg += '：目前 ' + e.meldPoints + ' 點，需要 ' + e.required + ' 點';
+      return '<li>' + msg + '</li>';
+    });
+    errEl.innerHTML = '還不能結束回合（紅框牌組需修正）：<ul>' + items.join('') + '</ul>';
+  } else errEl.innerHTML = '';
+
+  if (document.getElementById('info').classList.contains('show')) renderInfo();
+  document.body.classList.toggle('has-sel', S.selected.size > 0);
+  updateTimer();
+}
+
+function renderInfo() {
+  const r = S.rules;
+  const fact = (k, v) => '<dt>' + k + '</dt><dd>' + v + '</dd>';
+  document.getElementById('infoFacts').innerHTML = r
+    ? fact('牌局編號', S.seed) + fact('回合', S.turnNo) + fact('對手', persona().name + '（' + S.computerHand.length + ' 張）') + fact('牌池', S.pool.length + ' 張')
+    : fact('狀態', '尚未開局');
+  document.getElementById('infoRules').innerHTML = r
+    ? fact('破冰', r.iceBreakEnabled ? r.iceBreakPoints + ' 點' + (S.hasMelded ? '（已破冰）' : '') : '關閉') +
+      fact('思考時間', r.timerEnabled ? r.turnSeconds + ' 秒' : '不限') +
+      fact('重設本回合', r.resetPenalty ? '罰摸 ' + r.penaltyDraw + ' 張並結束回合' : '免費') +
+      fact('三同色', r.sameColorTriple ? '啟用' : '關閉') +
+      fact('宗師單張抽換', r.masterSteal ? '啟用' : '關閉') +
+      fact('起始手牌', r.handSize + ' 張') + fact('罰摸張數', r.penaltyDraw + ' 張') + fact('手上百搭計分', r.jokerPenalty + ' 點')
+    : '';
+  document.getElementById('log').innerHTML = S.log.slice().reverse().map(l => '<li>' + l + '</li>').join('');
+}
+
+function openInfo() {
+  renderInfo();
+  document.getElementById('info').classList.add('show');
+}
+
+function render() {
+  normalizeHand();
+  renderBoard();
+  renderRack();
+  renderPool();
+  renderCompRack();
+  renderStatus();
+}
+
+function centerView() {
+  const b = document.getElementById('board');
+  b.scrollLeft = Math.max(0, (GRID.cols * M.cw - b.clientWidth) / 2);
+  b.scrollTop = Math.max(0, Math.floor(GRID.rows / 2) * M.ch - b.clientHeight / 2);
+}
+
+function updateTimer() {
+  const el = document.getElementById('timer');
+  if (!S.deadline || S.phase !== 'player') { el.textContent = ''; el.classList.remove('warn'); return; }
+  const left = Math.max(0, Math.ceil((S.deadline - Date.now()) / 1000));
+  el.textContent = '⏱ ' + left + ' 秒';
+  el.classList.toggle('warn', left <= 10);
+  if (left === 0) handleTimeout();
+}
+
+function renderResult() {
+  const r = S.result;
+  const title = r.winner === 'player' ? '🏆 你獲勝！' : r.winner === 'computer' ? '電腦獲勝' : '🤝 平手';
+  const reason = S.hand.length === 0 ? '你出完了所有手牌（Rummikub）！' : S.computerHand.length === 0 ? '電腦出完了所有手牌。' : '牌池已用完且一整輪無人出牌，比較手牌點數。';
+  const rack = hand => '<div class="rtiles">' + (hand.length ? hand.map(t => tileHtml(t, null)).join('') : '（無）') + '</div>';
+  document.getElementById('resultCard').innerHTML =
+    '<h2>' + title + '</h2><div>' + reason + '</div>' +
+    '<table><tr><th></th><th>剩餘</th><th>點數</th><th>得分</th></tr>' +
+    '<tr><td>你</td><td>' + S.hand.length + ' 張</td><td>' + r.playerPoints + '</td><td><b>' + r.scores.player + '</b></td></tr>' +
+    '<tr><td>電腦（' + persona().name + '）</td><td>' + S.computerHand.length + ' 張</td><td>' + r.computerPoints + '</td><td><b>' + r.scores.computer + '</b></td></tr></table>' +
+    '<div>你的剩餘手牌：</div>' + rack(S.hand) + '<div>電腦的剩餘手牌：</div>' + rack(S.computerHand) +
+    '<div class="actions"><button class="primary" data-act="again">再來一局（相同設定）</button>' +
+    '<button data-act="opensetup">變更設定</button><button data-act="closeresult">看桌面</button></div>';
+  document.getElementById('result').classList.add('show');
+}
+
+// ---------------------------------------------------------------------------
+// Setup screen
+// ---------------------------------------------------------------------------
+function renderSetup() {
+  document.getElementById('personaList').innerHTML = E.PERSONAS.map(p =>
+    '<label class="persona"><input type="radio" name="persona" value="' + p.id + '"' + (S.config.persona === p.id ? ' checked' : '') + '>' +
+    '<span><b>' + (PERSONA_ICONS[p.id] || '') + ' ' + p.name + '</b>　' + p.desc + '</span></label>').join('');
+  document.querySelectorAll('#setup [data-cfg]').forEach(el => {
+    const k = el.dataset.cfg;
+    if (el.type === 'checkbox') el.checked = !!S.config[k];
+    else el.value = S.config[k];
+  });
+  document.querySelectorAll('#setup [data-out]').forEach(el => { el.textContent = S.config[el.dataset.out]; });
+  document.getElementById('rowIce').hidden = !S.config.iceBreakEnabled;
+  document.getElementById('rowTimer').hidden = !S.config.timerEnabled;
+  document.getElementById('btnBack').hidden = !(S.phase === 'player' || S.phase === 'computer');
+}
+
+function openSetup() {
+  document.getElementById('result').classList.remove('show');
+  document.getElementById('exportBox').hidden = true;
+  renderSetup();
+  document.getElementById('setup').classList.add('show');
+}
+
+function exportConfig() {
+  return JSON.stringify({ version: APP_VERSION, engine: E.VERSION, config: S.config }, null, 2);
+}
+
+document.getElementById('setup').addEventListener('input', ev => {
+  const el = ev.target;
+  if (el.name === 'persona') { S.config.persona = el.value; saveConfig(); return; }
+  const k = el.dataset.cfg;
+  if (!k) return;
+  S.config[k] = el.type === 'checkbox' ? el.checked : Number(el.value);
+  saveConfig();
+  renderSetup();
+  if ((k === 'showLabels' || k === 'xrayEnabled' || k === 'soundEnabled' || k === 'showDebug') && S.phase !== 'idle') render();
+});
+
+// ---------------------------------------------------------------------------
+// Input: click selection, pointer drag, X-Ray hover/click, and keyboard shortcuts
+// ---------------------------------------------------------------------------
+function cellAt(clientX, clientY) {
+  const r = document.getElementById('table').getBoundingClientRect();
+  return { col: Math.floor((clientX - r.left) / M.cw), row: Math.floor((clientY - r.top) / M.ch) };
+}
+
+function resolveTarget(el, clientX, clientY) {
+  if (!el) return null;
+  if (el.closest('#rackArea')) {
+    const slot = el.closest('.slot');
+    if (slot) return { type: 'rack', pos: +slot.dataset.pos };
+    const tile = el.closest('.tile[data-zone="rack"]');
+    if (tile) {
+      const r = tile.getBoundingClientRect();
+      return { type: 'rack', pos: +tile.dataset.pos + (clientX > r.left + r.width / 2 ? 1 : 0) };
+    }
+    return { type: 'rack', pos: S.hand.length };
+  }
+  if (!el.closest('#table')) return null;
+  const tile = el.closest('.tile[data-zone="board"]');
+  if (tile) {
+    const r = tile.getBoundingClientRect();
+    return { type: 'insert', key: +tile.dataset.key, pos: +tile.dataset.pos + (clientX > r.left + r.width / 2 ? 1 : 0) };
+  }
+  const c = cellAt(clientX, clientY);
+  if (c.row < 0 || c.row >= GRID.rows || c.col < 0 || c.col >= GRID.cols) return null;
+  for (const g of S.board) {
+    if (g.row !== c.row || g.tiles.every(t => S.selected.has(t.id))) continue;
+    if (c.col === g.col - 1) return { type: 'insert', key: g.key, pos: 0 };
+    if (c.col === g.col + g.tiles.length) return { type: 'insert', key: g.key, pos: g.tiles.length };
+    if (c.col >= g.col && c.col < g.col + g.tiles.length) return { type: 'insert', key: g.key, pos: c.col - g.col };
+  }
+  return { type: 'cell', row: c.row, col: c.col };
+}
+
+function showPreview(target, grabId) {
+  const pv = document.getElementById('preview');
+  document.querySelectorAll('.slot.drop-hover').forEach(n => n.classList.remove('drop-hover'));
+  if (!pv) return;
+  pv.style.display = 'none';
+  pv.classList.remove('bar');
+  if (!target) return;
+  if (target.type === 'rack') {
+    const s = document.querySelector('#rack .slot[data-pos="' + target.pos + '"]');
+    if (s) s.classList.add('drop-hover');
+    return;
+  }
+  if (target.type === 'insert') {
+    const g = groupByKey(target.key);
+    if (!g) return;
+    pv.classList.add('bar');
+    pv.style.left = ((g.col + target.pos) * M.cw - 3) + 'px';
+    pv.style.top = (g.row * M.ch + M.lh) + 'px';
+    pv.style.height = M.th + 'px';
+    pv.style.display = 'block';
+    return;
+  }
+  const whole = wholeGroupSelected();
+  const len = S.selected.size;
+  const order = whole ? whole.tiles.map(t => t.id) : E.arrangeGroup(selectionTiles()).map(t => t.id);
+  const gi = Math.max(0, order.indexOf(grabId));
+  const spot = planSpot(len, target.row, target.col - gi, whole ? new Set([whole.key]) : null);
+  pv.style.left = (spot.col * M.cw - 2) + 'px';
+  pv.style.top = (spot.row * M.ch + M.lh - 2) + 'px';
+  pv.style.width = (len * M.cw + 2) + 'px';
+  pv.style.height = (M.th + 4) + 'px';
+  pv.style.display = 'block';
+}
+
+let drag = null;
+let suppressClick = false;
+
+// Hover X-Ray tracking on rack tiles
+document.getElementById('rackArea').addEventListener('pointerover', ev => {
+  if (drag || S.phase !== 'player' || S.selected.size > 0 || !S.config.xrayEnabled) return;
+  const tile = ev.target.closest('.tile[data-zone="rack"]');
+  const id = tile ? tile.dataset.id : null;
+  if (id !== S.hoverTileId) {
+    S.hoverTileId = id;
+    renderBoard();
+  }
+});
+document.getElementById('rackArea').addEventListener('pointerleave', () => {
+  if (S.hoverTileId) {
+    S.hoverTileId = null;
+    if (!drag && S.phase === 'player') renderBoard();
+  }
+});
+
+document.addEventListener('pointerdown', ev => {
+  const tile = ev.target.closest('.tile[data-zone]');
+  if (!tile || S.phase !== 'player' || ev.button > 0) return;
+  // On touch devices, allow locked board tiles to pan/scroll the board naturally
+  if (isLocked(tile.dataset.id) && ev.pointerType === 'touch') return;
+  drag = { id: tile.dataset.id, x: ev.clientX, y: ev.clientY, shift: ev.shiftKey, started: false, target: null };
+});
+
+document.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  if (!drag.started) {
+    if (Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 6) return;
+    if (isLocked(drag.id)) { Sound.error(); toast('尚未破冰，不能移動桌面上的牌'); drag = null; return; }
+    const g = groupOfTile(drag.id);
+    if (drag.shift && g) { S.selected.clear(); g.tiles.forEach(t => S.selected.add(t.id)); }
+    else if (!S.selected.has(drag.id)) { S.selected.clear(); S.selected.add(drag.id); }
+    if (selectionInOrder().some(isLocked)) { Sound.error(); toast('尚未破冰，不能移動桌面上的牌'); drag = null; S.selected.clear(); render(); return; }
+    S.hoverTileId = null;
+    render();
+    drag.started = true;
+    document.body.classList.add('dragging');
+    const whole = wholeGroupSelected();
+    const order = whole ? whole.tiles : selectionTiles();
+    const ghost = document.getElementById('ghost');
+    ghost.innerHTML = order.map(t => tileHtml(t, null)).join('');
+    ghost.style.display = 'flex';
+    drag.grabIndex = Math.max(0, order.findIndex(t => t.id === drag.id));
+    for (const id of S.selected) {
+      const node = document.querySelector('.tile[data-id="' + id + '"]');
+      if (node) node.classList.add('dragging-src');
+    }
+  }
+  ev.preventDefault();
+  const ghost = document.getElementById('ghost');
+  ghost.style.left = (ev.clientX - drag.grabIndex * M.cw - M.tw / 2) + 'px';
+  ghost.style.top = (ev.clientY - M.th * 0.6) + 'px';
+  autoScroll(ev.clientX, ev.clientY);
+  const under = document.elementFromPoint(ev.clientX, ev.clientY);
+  drag.target = resolveTarget(under, ev.clientX, ev.clientY);
+  showPreview(drag.target, drag.id);
+});
+
+function autoScroll(x, y) {
+  const b = document.getElementById('board');
+  const r = b.getBoundingClientRect();
+  if (y < r.top || y > r.bottom) return;
+  const edge = 30, step = 12;
+  if (x < r.left + edge) b.scrollLeft -= step;
+  else if (x > r.right - edge) b.scrollLeft += step;
+  if (y < r.top + edge) b.scrollTop -= step;
+  else if (y > r.bottom - edge) b.scrollTop += step;
+}
+
+function endDrag(cancelled) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (!d.started) return;
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 0);
+  document.body.classList.remove('dragging');
+  document.getElementById('ghost').style.display = 'none';
+  showPreview(null);
+  if (!cancelled && d.target) applyTarget(d.target, d.id);
+  if (S.selected.size || document.querySelector('.dragging-src')) { S.selected.clear(); render(); }
+}
+document.addEventListener('pointerup', () => endDrag(false));
+document.addEventListener('pointercancel', () => endDrag(true));
+
+document.addEventListener('click', ev => {
+  if (suppressClick) { suppressClick = false; return; }
+  const act = ev.target.closest('[data-act]');
+  if (act) return handleAction(act.dataset.act);
+  if (ev.target.closest('#poolArea') && S.phase === 'player' && !isDirty()) return playerDraw();
+  if (S.phase !== 'player' || ev.target.closest('#topZone, #statusBar, #actions, #errors, .overlay')) return;
+
+  // Clicking an X-Ray ghost extension slot immediately attaches the active hand tile
+  const xext = ev.target.closest('.xray-ext');
+  if (xext) {
+    const tid = xext.dataset.xrayTile;
+    if (tid) {
+      S.selected.clear();
+      S.selected.add(tid);
+      applyTarget({ type: 'insert', key: +xext.dataset.xrayKey, pos: +xext.dataset.xrayPos }, tid);
+      return;
+    }
+  }
+
+  const seam = ev.target.closest('.seam');
+  if (seam && !S.selected.size) { splitGroup(+seam.dataset.key, +seam.dataset.pos); return; }
+  const tile = ev.target.closest('.tile[data-zone]');
+  if (tile) {
+    const now = Date.now();
+    const id = tile.dataset.id;
+    if (tile.dataset.zone === 'board' && lastTileClick.id === id && now - lastTileClick.at < 400) {
+      lastTileClick = { id: null, at: 0 };
+      selectGroup(+tile.dataset.key);
+      return;
+    }
+    lastTileClick = { id: id, at: now };
+    toggleSelect(id);
+    return;
+  }
+  if (S.selected.size) applyTarget(resolveTarget(ev.target, ev.clientX, ev.clientY), null);
+});
+let lastTileClick = { id: null, at: 0 };
+
+function overlayOpen() {
+  return ['setup', 'result', 'info'].some(id => document.getElementById(id).classList.contains('show'));
+}
+
+document.addEventListener('keydown', ev => {
+  if (overlayOpen() || ev.target.closest('input, textarea')) return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
+    ev.preventDefault();
+    if (ev.shiftKey) stepRedo(); else stepUndo();
+    return;
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') {
+    ev.preventDefault();
+    stepRedo();
+    return;
+  }
+  if (ev.key === 'Escape' && S.selected.size) { S.selected.clear(); render(); }
+  else if (ev.key === ' ' && S.phase === 'player' && selectionFormsGroup()) {
+    ev.preventDefault();
+    if (!ev.repeat) applyTarget({ type: 'center' }, null);
+  }
+  else if (ev.key === ' ') {
+    ev.preventDefault();
+    if (!ev.repeat) organize();
+  }
+  else if (ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    if (!ev.repeat) organize('number');
+  }
+  else if (ev.key === 'ArrowDown') {
+    ev.preventDefault();
+    if (!ev.repeat) organize('color');
+  }
+  else if ((ev.key === 't' || ev.key === 'T') && S.phase === 'player') {
+    ev.preventDefault();
+    if (!ev.repeat) tidyTable();
+  }
+  else if ((ev.key === 'c' || ev.key === 'C') && S.phase !== 'idle') {
+    ev.preventDefault();
+    centerView();
+  }
+  else if ((ev.key === 'h' || ev.key === 'H') && S.phase === 'player') {
+    ev.preventDefault();
+    if (!ev.repeat) triggerCoach();
+  }
+  else if (ev.key === 'Enter' && S.phase === 'player' && S.selected.size) {
+    ev.preventDefault();
+    applyTarget({ type: 'center' }, null);
+  }
+});
+document.addEventListener('keyup', ev => { if (ev.key === ' ' && !overlayOpen()) ev.preventDefault(); });
+
+function handleAction(a) {
+  if (a === 'start') newGame();
+  else if (a === 'again') newGame();
+  else if (a === 'opensetup') openSetup();
+  else if (a === 'closesetup') document.getElementById('setup').classList.remove('show');
+  else if (a === 'closeresult') document.getElementById('result').classList.remove('show');
+  else if (a === 'closeinfo') document.getElementById('info').classList.remove('show');
+  else if (a === 'defaults') {
+    S.config = Object.assign({}, DEFAULT_CONFIG);
+    saveConfig();
+    renderSetup();
+    if (S.phase !== 'idle') render();
+    toast('已還原預設設定');
+  } else if (a === 'export' || a === 'copy') {
+    const box = document.getElementById('exportBox');
+    box.value = exportConfig();
+    box.hidden = false;
+    if (a === 'copy') {
+      if (navigator.clipboard) navigator.clipboard.writeText(box.value).then(() => toast('已複製設定 JSON'), () => { box.select(); toast('請按 Ctrl+C 複製'); });
+      else { box.select(); toast('請按 Ctrl+C 複製'); }
+    }
+  } else if (a === 'download') {
+    const blob = new Blob([exportConfig()], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'rummy-config-' + APP_VERSION + '.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+}
+
+document.getElementById('btnSound').onclick = () => {
+  S.config.soundEnabled = !S.config.soundEnabled;
+  saveConfig();
+  if (S.config.soundEnabled) Sound.click();
+  renderStatus();
+};
+document.getElementById('btnNew').onclick = openSetup;
+document.getElementById('btnInfo').onclick = openInfo;
+document.getElementById('btnEnd').onclick = endTurn;
+document.getElementById('btnReset').onclick = resetTurn;
+document.getElementById('btnDraw').onclick = () => playerDraw();
+document.getElementById('btnSort').onclick = () => organize();
+document.getElementById('btnPlace').onclick = () => applyTarget({ type: 'center' }, null);
+document.getElementById('btnClear').onclick = () => { S.selected.clear(); render(); };
+document.getElementById('btnUndo').onclick = stepUndo;
+document.getElementById('btnRedo').onclick = stepRedo;
+document.getElementById('btnTidy').onclick = tidyTable;
+document.getElementById('btnCenter').onclick = centerView;
+document.getElementById('btnCoach').onclick = triggerCoach;
+window.addEventListener('resize', () => { applyMetrics(); if (S.phase !== 'idle') render(); });
+
+applyMetrics();
+setInterval(updateTimer, 250);
+render();
+openSetup();
+</script>
+</body>
+</html>
